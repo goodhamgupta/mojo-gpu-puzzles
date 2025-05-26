@@ -75,7 +75,8 @@ p16 = { cmd = "python problems/p16/p16.py", depends-on = ["p16-package"] }
 [dependencies]
 max = "*"
 bash = ">=5.2.21,<6"
-python = "==3.12"
+python = ">=3.11,<3.13"
 manim = ">=0.18.1,<0.19"
 mdbook = ">=0.4.48,<0.5"
 pre-commit = ">=4.2.0,<5"
+pygame = ">=2.6.1,<3"
