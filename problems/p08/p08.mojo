@@ -33,6 +33,8 @@ fn add_10_shared(
     # works within a thread block
     barrier()
 
+    if global_i < size:
+        out[global_i] = a[local_i] + 10
     # FILL ME IN (roughly 2 lines)
 
 
