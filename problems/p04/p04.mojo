@@ -1,6 +1,7 @@
 from memory import UnsafePointer
 from gpu import thread_idx, block_dim, block_idx
 from gpu.host import DeviceContext
+from layout import Layout, LayoutTensor
 from testing import assert_equal
 
 # ANCHOR: add_10_2d
@@ -8,19 +9,20 @@ alias SIZE = 2
 alias BLOCKS_PER_GRID = 1
 alias THREADS_PER_BLOCK = (3, 3)
 alias dtype = DType.float32
+alias result_layout = Layout.row_major(SIZE * SIZE)
+alias Tensor = LayoutTensor[dtype, result_layout, MutableAnyOrigin]
 
 
 fn add_10_2d(
-    out: UnsafePointer[Scalar[dtype]],
-    a: UnsafePointer[Scalar[dtype]],
+    out: Tensor,
+    a: Tensor,
     size: Int,
 ):
     row = thread_idx.y
     col = thread_idx.x
-    if row < size and col < size:
-        # Row major format
-        out[row * size + col] = a[row * size + col] + 10
-    # FILL ME IN (roughly 2 lines)
+    if row >= size or col >= size:
+        return
+    out[row * size + col] = a[row * size + col] + 10
 
 
 # ANCHOR_END: add_10_2d
@@ -40,9 +42,13 @@ def main():
                     a_host[i * SIZE + j] = i * SIZE + j
                     expected[i * SIZE + j] = a_host[i * SIZE + j] + 10
 
+
+        var a_tensor = Tensor(a)
+        var out_tensor = Tensor(out)
+
         ctx.enqueue_function[add_10_2d](
-            out.unsafe_ptr(),
-            a.unsafe_ptr(),
+            out_tensor,
+            a_tensor,
             SIZE,
             grid_dim=BLOCKS_PER_GRID,
             block_dim=THREADS_PER_BLOCK,
