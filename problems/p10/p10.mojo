@@ -34,8 +34,22 @@ fn dot_product(
         # This is NOT parallel reduction :(
         for idx in range(size):
             out[0] = out[0] + shared[idx]
-    # FILL ME IN (roughly 13 lines)
-    ...
+        # This is also SLOWER
+    # Loops can cause THEAD DIVERGENCE because threads are executed
+    # in warps
+    
+    # Do parallel reduction in shared memory
+    stride = TPB // 2
+    while(stride > 0):
+        if local_i < stride:
+            shared[local_i] += shared[local_i + stride]
+        
+        barrier()
+        stride = stride // 2
+    
+    # only allow thread 0 to write result
+    if local_i == 0:
+        out[0] = shared[0]
 
 
 # ANCHOR_END: dot_product
