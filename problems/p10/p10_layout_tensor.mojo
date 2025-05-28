@@ -24,8 +24,36 @@ fn dot_product[
     b: LayoutTensor[mut=True, dtype, in_layout],
     size: Int,
 ):
-    # FILL ME IN (roughly 13 lines)
-    ...
+
+    shared = tb[dtype]().row_major[TPB]().shared().alloc()
+
+    global_i = block_dim.x * block_idx.x + thread_idx.x
+    local_i = thread_idx.x
+    if global_i < size:
+        shared[local_i] = a[global_i] * b[global_i]
+
+    barrier()
+
+    if global_i < size:
+        # This is NOT parallel reduction :(
+        for idx in range(size):
+            out[0] = out[0] + shared[idx]
+        # This is also SLOWER
+    # Loops can cause THEAD DIVERGENCE because threads are executed
+    # in warps
+    
+    # Do parallel reduction in shared memory
+    stride = TPB // 2
+    while(stride > 0):
+        if local_i < stride:
+            shared[local_i] += shared[local_i + stride]
+        
+        barrier()
+        stride = stride // 2
+    
+    # only allow thread 0 to write result
+    if local_i == 0:
+        out[0] = shared[0]
 
 
 # ANCHOR_END: dot_product_layout_tensor
