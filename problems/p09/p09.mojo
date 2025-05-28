@@ -27,14 +27,17 @@ fn pooling(
     local_i = thread_idx.x
     if global_i < size:
         shared[local_i] = a[global_i]
-    
+
     barrier()
 
     if global_i < size:
+        # My conditions are slightly different from the one's implemented in the solution key, BUT the results are the same 💪
         if local_i - 2 >= 0:
-            out[global_i] = shared[local_i - 2] + shared[local_i - 1] + shared[local_i]
+            out[global_i] = (
+                shared[local_i - 2] + shared[local_i - 1] + shared[local_i]
+            )
         elif local_i - 1 >= 0:
-            out[global_i] = shared[local_i-1] + shared[local_i]
+            out[global_i] = shared[local_i - 1] + shared[local_i]
         else:
             out[global_i] = shared[local_i]
 
