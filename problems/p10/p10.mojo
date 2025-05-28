@@ -30,10 +30,10 @@ fn dot_product(
 
     barrier()
 
-    if global_i < size:
-        # This is NOT parallel reduction :(
-        for idx in range(size):
-            out[0] = out[0] + shared[idx]
+    # if global_i < size:
+    #     # This is NOT parallel reduction :(
+    #     for idx in range(size):
+    #         out[0] = out[0] + shared[idx]
         # This is also SLOWER
     # Loops can cause THEAD DIVERGENCE because threads are executed
     # in warps

@@ -24,8 +24,37 @@ fn conv_1d_simple[
     a: LayoutTensor[mut=False, dtype, in_layout],
     b: LayoutTensor[mut=False, dtype, conv_layout],
 ):
+    # Psuedocode convolution
+    # for i in range(SIZE):
+    #   for j in range(CONV):
+    #     if i + j < SIZE:
+    #         ret[i] += a_host[i + j] * b_host[j]
     global_i = block_dim.x * block_idx.x + thread_idx.x
     local_i = thread_idx.x
+
+    a_size = a.shape[0]()
+    b_size = b.shape[0]()
+    shared_size = tb[dtype]().row_major[TPB]().shared().alloc()
+    shared_conv = tb[dtype]().row_major[TPB]().shared().alloc()
+
+    if global_i < SIZE:
+        shared_size[local_i] = a[global_i]
+    if global_i < CONV:
+        shared_conv[local_i] = b[global_i % b_size]
+
+    barrier()
+
+    # shared_conv[local_i] = shared_conv[local_i] * shared_size[local_i]
+
+    if global_i < SIZE:
+        var local_sum: out.element_type = 0
+
+        @parameter
+        for j in range(CONV):
+            if local_i + j < SIZE:
+                local_sum += shared_size[local_i + j] * shared_conv[j]
+        
+        out[global_i] = local_sum
     # FILL ME IN (roughly 14 lines)
 
 
@@ -48,8 +77,8 @@ fn conv_1d_block_boundary[
     a: LayoutTensor[mut=False, dtype, in_layout],
     b: LayoutTensor[mut=False, dtype, conv_layout],
 ):
-    global_i = block_dim.x * block_idx.x + thread_idx.x
-    local_i = thread_idx.x
+    _global_i = block_dim.x * block_idx.x + thread_idx.x
+    _local_i = thread_idx.x
     # FILL ME IN (roughly 18 lines)
 
 
