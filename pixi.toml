@@ -72,6 +72,8 @@ p16-package = "mojo package problems/p16/op -o problems/p16/op.mojopkg"
 p16-test-kernels = { cmd = "mojo test problems/p16", depends-on = ["p16-package"] }
 p16 = { cmd = "python problems/p16/p16.py", depends-on = ["p16-package"] }
 
+p17 = "mojo package problems/p17/op -o problems/p17/op.mojopkg && python problems/p17/p17.py"
+
 [dependencies]
 max = "*"
 bash = ">=5.2.21,<6"

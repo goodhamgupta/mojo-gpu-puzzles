@@ -103,16 +103,77 @@ Through the puzzles in this book, you'll develop an intuitive understanding of t
 
 This book takes you on a journey from first principles to advanced GPU programming techniques. Rather than treating the GPU as a mysterious black box, we'll build your understanding layer by layer—starting with how individual threads operate and culminating in sophisticated parallel algorithms. By mastering both low-level memory management and high-level tensor abstractions, you'll gain the versatility to tackle any GPU programming challenge.
 
-Your learning path includes:
+### Your Complete Learning Path
 
-- **GPU Programming Fundamentals**: Thread organization, memory hierarchies, and kernel execution models
-- **Dual Implementation Paths**: Beginning with raw memory approaches using pointers, then transitioning to LayoutTensor abstractions
-- **Memory Management**: Working with global, shared, and thread-local memory for optimal performance
-- **Low-level to High-level Progression**: Understanding the foundation with UnsafePointer before leveraging LayoutTensor's elegant abstractions
-- **Layout Tensors**: Mastering Mojo's powerful tensor abstractions for simplified, efficient GPU computation
-- **Parallel Algorithms**: Implementing and optimizing parallel reductions, convolutions, matrix operations, and more
-- **Performance Optimization**: Advanced techniques for memory coalescing, tiling, bank conflict avoidance, and minimizing thread divergence
-- **Real-world Applications**: Applying these concepts to machine learning, signal processing, and computational tasks
+The book is structured into ten progressive parts, each building on the previous to create a comprehensive GPU programming education:
+
+| Essential Skill | Covered In |
+|-----------------|------------|
+| Thread/Block basics | Part I (1-8) |
+| Core algorithms | Part II (9-14) |
+| MAX Graph integration | Part III (15-17) |
+| PyTorch integration | Part IV (18-19) |
+| Functional patterns & benchmarking | Part V (20-21) |
+| Warp programming | Part VI (22-23) |
+| Memory optimization | Part VII (24-27) |
+| Performance analysis | Part VIII (28-30) |
+| Modern GPU features | Part IX (31-33) |
+| Scaling up | Part X (34-36) |
+
+### Detailed Learning Objectives
+
+**Part I: GPU Fundamentals**
+- Master thread indexing and block organization
+- Understand memory access patterns and guards
+- Work with both raw pointers and LayoutTensor abstractions
+- Learn shared memory basics for inter-thread communication
+
+**Part II: GPU Algorithms**
+- Implement parallel reductions and pooling operations
+- Build efficient convolution kernels
+- Master prefix sum (scan) algorithms
+- Optimize matrix multiplication with tiling strategies
+
+**Part III: MAX Graph Integration**
+- Create custom MAX Graph operations
+- Interface GPU kernels with Python code
+- Build production-ready operations like softmax and attention
+
+**Part IV: PyTorch Integration**
+- Bridge Mojo GPU kernels with PyTorch tensors
+- Use CustomOpLibrary for seamless tensor marshalling
+- Integrate with torch.compile for optimized execution
+
+**Part V: Mojo Functional Patterns & Benchmarking**
+- Master essential functional patterns: elementwise, parallelize, vectorize, tile
+- Learn systematic performance optimization with tile_and_unswitch and unswitch
+- Develop quantitative benchmarking skills for informed decision-making
+
+**Part VI: Warp-Level Programming**
+- Understand when to use warp programming vs functional patterns
+- Master essential warp operations: reduce_add, shuffle_down, vote_all
+- Learn to combine warp programming with functional patterns effectively
+
+**Part VII: Advanced Memory Operations**
+- Achieve optimal memory coalescing patterns
+- Use async memory operations for overlapping compute
+- Implement memory fences and atomic operations
+- Master prefetching and cache optimization
+
+**Part VIII: Performance Analysis & Optimization**
+- Profile GPU kernels and identify bottlenecks
+- Optimize occupancy and resource utilization
+- Eliminate shared memory bank conflicts
+
+**Part IX: Advanced GPU Features**
+- Program tensor cores for AI workloads
+- Implement GPU-based random number generation
+- Master advanced synchronization patterns
+
+**Part X: Multi-GPU & Advanced Applications**
+- Implement multi-stream concurrent execution
+- Scale across multiple GPUs
+- Build end-to-end optimized applications
 
 The book uniquely challenges the status quo approach by first building understanding with low-level memory manipulation, then gradually transitioning to Mojo's powerful LayoutTensor abstractions. This gives you both deep understanding of GPU memory patterns and practical knowledge of modern tensor-based approaches.
 
