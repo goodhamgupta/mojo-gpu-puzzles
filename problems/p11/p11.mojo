@@ -125,7 +125,7 @@ fn conv_1d_block_boundary[
 
         @parameter
         for j in range(CONV_2):
-            if local_i + j < TPB + CONV - 1:
+            if local_i + j < TPB + CONV_2 - 1:
                 local_sum += shared_a[local_i + j] * shared_b[j]
         
         out[global_i] = local_sum
