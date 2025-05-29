@@ -62,7 +62,7 @@ fn conv_1d_simple[
         for j in range(CONV):
             if local_i + j < SIZE:
                 local_sum += shared_size[local_i + j] * shared_conv[j]
-        
+
         out[global_i] = local_sum
     # FILL ME IN (roughly 14 lines)
 
@@ -86,8 +86,50 @@ fn conv_1d_block_boundary[
     a: LayoutTensor[mut=False, dtype, in_layout],
     b: LayoutTensor[mut=False, dtype, conv_layout],
 ):
-    _global_i = block_dim.x * block_idx.x + thread_idx.x
-    _local_i = thread_idx.x
+    global_i = block_dim.x * block_idx.x + thread_idx.x
+    local_i = thread_idx.x
+
+    # step 1: account for padding
+    shared_a = tb[dtype]().row_major[TPB + CONV_2 - 1]().shared().alloc()
+    shared_b = tb[dtype]().row_major[CONV_2]().shared().alloc()
+
+    if global_i < SIZE_2:
+        shared_a[local_i] = a[global_i]
+
+    # step 2: load elements needed for convolution at block boundary
+    # At the block boundary, in the worst case, we only need 3 more elements
+    # from the next block(because the size of the conv filter is 4)
+    # Eg:
+    # global_i = 2, local_i = 2
+    # next_idx = 2 + 8 = 10
+    # if 10 < 15, TRUE
+    # TRUE: shared_a[8 + 2] = a[10]
+    # Q: Do we need this? Can I not just do
+    # if global_i < SIZE_2: shared_a[local_i] = a[global_i]
+    # and let LayoutTensor handle the OOB case?
+    if local_i < CONV_2 - 1:
+        next_idx = global_i + TPB
+        if next_idx < SIZE_2:
+            shared_a[TPB + local_i] = a[next_idx]
+        else:
+            # init OOB elemnts with 0
+            shared_a[TPB + local_i] = 0
+
+    if local_i < CONV_2:
+        shared_b[local_i] = b[local_i]
+
+    barrier()
+
+    if global_i < SIZE_2:
+        var local_sum: out.element_type = 0
+
+        @parameter
+        for j in range(CONV_2):
+            if local_i + j < TPB + CONV - 1:
+                local_sum += shared_a[local_i + j] * shared_b[j]
+        
+        out[global_i] = local_sum
+
     # FILL ME IN (roughly 18 lines)
 
 
