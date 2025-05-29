@@ -36,19 +36,28 @@ fn conv_1d_simple[
     b_size = b.shape[0]()
     shared_size = tb[dtype]().row_major[TPB]().shared().alloc()
     shared_conv = tb[dtype]().row_major[TPB]().shared().alloc()
+    # Optimisation: Change the memory of shared_conv to be of size CONV
+    # and then assign using global_i
+    # shared_conv = tb[dtype]().row_major[CONV]().shared().alloc()
+    # LayoutTensor will ensure that the program doesn't crash if global_i > CONV
 
     if global_i < SIZE:
         shared_size[local_i] = a[global_i]
-    if global_i < CONV:
-        shared_conv[local_i] = b[global_i % b_size]
+
+        # Optimisation:
+        # Assign the shared_conv here, and let layouttensor take care of ignoring
+        # invalid indices.
+        shared_conv[local_i] = b[global_i]
+    # if global_i < CONV:
+    #     shared_conv[local_i] = b[global_i]
 
     barrier()
-
-    # shared_conv[local_i] = shared_conv[local_i] * shared_size[local_i]
 
     if global_i < SIZE:
         var local_sum: out.element_type = 0
 
+        # This unrolls the loop
+        # https://docs.modular.com/mojo/manual/decorators/parameter/#parametric-for-statement
         @parameter
         for j in range(CONV):
             if local_i + j < SIZE:
