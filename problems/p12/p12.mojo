@@ -32,12 +32,22 @@ fn prefix_sum_simple[
         shared[local_i] = a[global_i]
 
     barrier()
+    offset = 1
 
-    if global_i >= 1:
+    if local_i >= offset:
+        shared[local_i] += shared[local_i - offset]
 
-        @parameter
-        for j in range(1, SIZE):
-            shared[j] += shared[j - 1]
+    barrier()
+    offset *= 2
+
+    if local_i >= offset:
+        shared[local_i] += shared[local_i - offset]
+
+    barrier()
+    offset *= 2
+
+    if local_i >= offset:
+        shared[local_i] += shared[local_i - offset]
 
     out[global_i] = shared[local_i]
 
