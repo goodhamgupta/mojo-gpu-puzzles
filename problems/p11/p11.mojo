@@ -107,6 +107,7 @@ fn conv_1d_block_boundary[
     # Q: Do we need this? Can I not just do
     # if global_i < SIZE_2: shared_a[local_i] = a[global_i]
     # and let LayoutTensor handle the OOB case?
+    # The method below prevents unnecessary thread divergence
     if local_i < CONV_2 - 1:
         next_idx = global_i + TPB
         if next_idx < SIZE_2:
@@ -115,11 +116,13 @@ fn conv_1d_block_boundary[
             # init OOB elemnts with 0
             shared_a[TPB + local_i] = 0
 
+    # step 3: conv kernel loading
     if local_i < CONV_2:
         shared_b[local_i] = b[local_i]
 
     barrier()
 
+    # step 4: convolution computation
     if global_i < SIZE_2:
         var local_sum: out.element_type = 0
 
@@ -127,7 +130,7 @@ fn conv_1d_block_boundary[
         for j in range(CONV_2):
             if local_i + j < TPB + CONV_2 - 1:
                 local_sum += shared_a[local_i + j] * shared_b[j]
-        
+
         out[global_i] = local_sum
 
     # FILL ME IN (roughly 18 lines)

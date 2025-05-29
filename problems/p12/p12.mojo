@@ -26,6 +26,21 @@ fn prefix_sum_simple[
     local_i = thread_idx.x
     # FILL ME IN (roughly 12 lines)
 
+    shared = tb[dtype]().row_major[SIZE]().shared().alloc()
+
+    if global_i < SIZE:
+        shared[local_i] = a[global_i]
+
+    barrier()
+
+    if global_i >= 1:
+
+        @parameter
+        for j in range(1, SIZE):
+            shared[j] += shared[j - 1]
+
+    out[global_i] = shared[local_i]
+
 
 # ANCHOR_END: prefix_sum_simple
 
