@@ -34,22 +34,39 @@ fn prefix_sum_simple[
     barrier()
     offset = 1
 
-    if local_i >= offset:
-        shared[local_i] += shared[local_i - offset]
+    # if local_i >= offset:
+    #     shared[local_i] += shared[local_i - offset]
 
-    barrier()
-    offset *= 2
+    # barrier()
+    # offset *= 2
 
-    if local_i >= offset:
-        shared[local_i] += shared[local_i - offset]
+    # if local_i >= offset:
+    #     shared[local_i] += shared[local_i - offset]
 
-    barrier()
-    offset *= 2
+    # barrier()
+    # offset *= 2
 
-    if local_i >= offset:
-        shared[local_i] += shared[local_i - offset]
+    # if local_i >= offset:
+    #     shared[local_i] += shared[local_i - offset]
 
-    out[global_i] = shared[local_i]
+    # out[global_i] = shared[local_i]
+
+    # NOTE:
+    # Adding the decorator @parameter gives a compile time errors here
+    # IMO, my previous approach is the same as adding the @parameter decorator,
+    # since I'm just manually writing the rollout of the loop.
+    # HOWEVER, my implementation is hard-coded to 8 TPB. If the TPB were increased to 16, I would naturally need to add another rollout.
+    # I'm not sure which is better performance wise.
+    # I would expect my approach to be better, but need to measure
+    for idx in range(Int(log2(Scalar[dtype](TPB)))):
+        if local_i >= offset and local_i < SIZE:
+            shared[local_i] += shared[local_i - offset]
+        
+        barrier()
+        offset *= 2
+
+    if global_i < SIZE:
+        out[global_i] = shared[local_i]
 
 
 # ANCHOR_END: prefix_sum_simple
