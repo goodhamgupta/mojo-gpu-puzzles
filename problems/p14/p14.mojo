@@ -27,15 +27,18 @@ fn naive_matmul[
     col = block_dim.x * block_idx.x + thread_idx.x
 
     if row < SIZE and col < SIZE:
+        var running_sum: out.element_type = 0
+        @parameter
         for k in range(SIZE):
             # NOTE: Looks like a race condition occurs here.
             # Without the print statement, the last element doesn't match the expected value.
             # HOWEVER, with it, the values match!
             # I tried creating a varible to track the "running_sum", and then assign it, but
             # I ran into more type errors.
-            print(row, col)
-            out[row, col] += a[row, k] * b[k, col]
-    
+            # FIX: Use out.element_type instead of dtype for the variable
+            running_sum += a[row, k] * b[k, col]
+        out[row, col] = running_sum
+
 
 # ANCHOR_END: naive_matmul
 
