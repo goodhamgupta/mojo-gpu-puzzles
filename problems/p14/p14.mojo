@@ -90,10 +90,46 @@ fn matmul_tiled[
     a: LayoutTensor[mut=False, dtype, layout],
     b: LayoutTensor[mut=False, dtype, layout],
 ):
-    local_row = thread_idx.x
-    local_col = thread_idx.y
-    global_row = block_idx.x * TPB + local_row
-    global_col = block_idx.y * TPB + local_col
+    local_row = thread_idx.y
+    local_col = thread_idx.x
+    tiled_row = block_idx.y * TPB + local_row
+    tiled_col = block_idx.x * TPB + local_col
+
+    # Shared memory
+    shared_a = tb[dtype]().row_major[TPB, TPB]().shared().alloc()
+    shared_b = tb[dtype]().row_major[TPB, TPB]().shared().alloc()
+
+    var acc: out.element_type = 0.0
+
+    @parameter
+    for tile in range((SIZE_TILED + TPB - 1) // TPB):
+        if local_row < TPB and local_col < TPB:
+            shared_a[local_row, local_col] = 0
+            shared_b[local_row, local_col] = 0
+        barrier()
+
+        # load tile A
+        if tiled_row < SIZE_TILED and (tile * TPB + local_col) < SIZE_TILED:
+            shared_a[local_row, local_col] = a[
+                tiled_row, tile * TPB + local_col
+            ]
+
+        if (tile * TPB + local_row) < SIZE_TILED and tiled_col < SIZE_TILED:
+            shared_b[local_row, local_col] = b[
+                tile * TPB + local_row, tiled_col
+            ]
+        barrier()
+
+        if tiled_row < SIZE_TILED and tiled_col < SIZE_TILED:
+
+            @parameter
+            for k in range(min(TPB, SIZE_TILED - tile * TPB)):
+                acc += shared_a[local_row, k] * shared_b[k, local_col]
+        barrier()
+
+    if tiled_row < SIZE_TILED and tiled_col < SIZE_TILED:
+        out[tiled_row, tiled_col] = acc
+
     # FILL ME IN (roughly 20 lines)
 
 
