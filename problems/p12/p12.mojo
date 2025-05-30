@@ -61,7 +61,7 @@ fn prefix_sum_simple[
     for idx in range(Int(log2(Scalar[dtype](TPB)))):
         if local_i >= offset and local_i < SIZE:
             shared[local_i] += shared[local_i - offset]
-        
+
         barrier()
         offset *= 2
 
@@ -88,8 +88,29 @@ fn prefix_sum_local_phase[
     size: Int,
     num_blocks: Int,
 ):
+    print(block_dim.x, block_idx.x, thread_idx.x)
     global_i = block_dim.x * block_idx.x + thread_idx.x
     local_i = thread_idx.x
+    shared = tb[dtype]().row_major[EXTENDED_SIZE]().shared().alloc()
+
+    if global_i < SIZE_2:
+        shared[local_i] = a[global_i]
+    
+    barrier()
+    offset = 1
+
+    for idx in range(Int(log2(Scalar[dtype](TPB)))):
+        if local_i >= offset and local_i < SIZE_2:
+            shared[local_i] += shared[local_i - offset]
+
+        barrier()
+        offset *= 2
+
+    if global_i < SIZE_2:
+        out[global_i] = shared[local_i]
+    
+    if local_i == TPB - 1:
+        out[size + block_idx.x] += shared[local_i]
     # FILL ME IN (roughly 14 lines)
 
 
@@ -99,6 +120,9 @@ fn prefix_sum_block_sum_phase[
 ](out: LayoutTensor[mut=False, dtype, layout], size: Int):
     global_i = block_dim.x * block_idx.x + thread_idx.x
     # FILL ME IN (roughly 3 lines)
+    if block_idx.x > 0 and global_i < size:
+        prev_block_sum = out[SIZE_2 + block_idx.x - 1]
+        out[global_i] += prev_block_sum
 
 
 # ANCHOR_END: prefix_sum_complete
