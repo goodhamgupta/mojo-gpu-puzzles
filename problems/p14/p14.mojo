@@ -1,10 +1,12 @@
 from sys import sizeof, argv
 from testing import assert_equal
 from gpu.host import DeviceContext
+from gpu.memory import async_copy_wait_all
 
 # ANCHOR: naive_matmul
 from gpu import thread_idx, block_idx, block_dim, barrier
 from layout import Layout, LayoutTensor
+from layout.layout_tensor import copy_dram_to_sram_async
 from layout.tensor_builder import LayoutTensorBuild as tb
 
 
@@ -90,45 +92,80 @@ fn matmul_tiled[
     a: LayoutTensor[mut=False, dtype, layout],
     b: LayoutTensor[mut=False, dtype, layout],
 ):
+    # LayoutTensor APIs
+    out_tile = out.tile[TPB, TPB](block_idx.y, block_idx.x)
+    a_shared = tb[dtype]().row_major[TPB, TPB]().shared().alloc()
+    b_shared = tb[dtype]().row_major[TPB, TPB]().shared().alloc()
     local_row = thread_idx.y
     local_col = thread_idx.x
-    tiled_row = block_idx.y * TPB + local_row
-    tiled_col = block_idx.x * TPB + local_col
-
-    # Shared memory
-    shared_a = tb[dtype]().row_major[TPB, TPB]().shared().alloc()
-    shared_b = tb[dtype]().row_major[TPB, TPB]().shared().alloc()
 
     var acc: out.element_type = 0.0
 
-    @parameter
-    for tile in range((SIZE_TILED + TPB - 1) // TPB):
-        if local_row < TPB and local_col < TPB:
-            shared_a[local_row, local_col] = 0
-            shared_b[local_row, local_col] = 0
+    alias load_a_layout = Layout.row_major(1, TPB)
+    alias load_b_layout = Layout.row_major(TPB, 1)
+    for idx in range((size + TPB - 1) // TPB):
+        a_tile = a.tile[TPB, TPB](block_idx.y, idx)
+        b_tile = b.tile[TPB, TPB](idx, block_idx.x)
+
+        copy_dram_to_sram_async[thread_layout=load_a_layout](a_shared, a_tile)
+        copy_dram_to_sram_async[thread_layout=load_b_layout](b_shared, b_tile)
+
+        async_copy_wait_all()
+
         barrier()
 
-        # load tile A
-        if tiled_row < SIZE_TILED and (tile * TPB + local_col) < SIZE_TILED:
-            shared_a[local_row, local_col] = a[
-                tiled_row, tile * TPB + local_col
-            ]
+        @parameter
+        for k in range(TPB):
+            acc += a_shared[local_row, k] * b_shared[k, local_col]
 
-        if (tile * TPB + local_row) < SIZE_TILED and tiled_col < SIZE_TILED:
-            shared_b[local_row, local_col] = b[
-                tile * TPB + local_row, tiled_col
-            ]
         barrier()
 
-        if tiled_row < SIZE_TILED and tiled_col < SIZE_TILED:
+        if (
+            block_idx.y * TPB + local_row < size
+            and block_idx.x * TPB + local_col < size
+        ):
+            out_tile[local_row, local_col] = acc
 
-            @parameter
-            for k in range(min(TPB, SIZE_TILED - tile * TPB)):
-                acc += shared_a[local_row, k] * shared_b[k, local_col]
-        barrier()
+    # Manual memory management
+    # local_row = thread_idx.y
+    # local_col = thread_idx.x
+    # tiled_row = block_idx.y * TPB + local_row
+    # tiled_col = block_idx.x * TPB + local_col
 
-    if tiled_row < SIZE_TILED and tiled_col < SIZE_TILED:
-        out[tiled_row, tiled_col] = acc
+    # # Shared memory
+    # shared_a = tb[dtype]().row_major[TPB, TPB]().shared().alloc()
+    # shared_b = tb[dtype]().row_major[TPB, TPB]().shared().alloc()
+
+    # var acc: out.element_type = 0.0
+
+    # @parameter
+    # for tile in range((SIZE_TILED + TPB - 1) // TPB):
+    #     if local_row < TPB and local_col < TPB:
+    #         shared_a[local_row, local_col] = 0
+    #         shared_b[local_row, local_col] = 0
+    #     barrier()
+
+    #     # load tile A
+    #     if tiled_row < SIZE_TILED and (tile * TPB + local_col) < SIZE_TILED:
+    #         shared_a[local_row, local_col] = a[
+    #             tiled_row, tile * TPB + local_col
+    #         ]
+
+    #     if (tile * TPB + local_row) < SIZE_TILED and tiled_col < SIZE_TILED:
+    #         shared_b[local_row, local_col] = b[
+    #             tile * TPB + local_row, tiled_col
+    #         ]
+    #     barrier()
+
+    #     if tiled_row < SIZE_TILED and tiled_col < SIZE_TILED:
+
+    #         @parameter
+    #         for k in range(min(TPB, SIZE_TILED - tile * TPB)):
+    #             acc += shared_a[local_row, k] * shared_b[k, local_col]
+    #     barrier()
+
+    # if tiled_row < SIZE_TILED and tiled_col < SIZE_TILED:
+    #     out[tiled_row, tiled_col] = acc
 
     # FILL ME IN (roughly 20 lines)
 
