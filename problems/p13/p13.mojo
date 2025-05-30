@@ -48,7 +48,6 @@ fn axis_sum[
         # Hence, it should be indexed with 2 dimensions!
         out[batch, 0] = shared[0]
 
-
     # FILL ME IN (roughly 15 lines)
 
 
@@ -64,9 +63,7 @@ def main():
                 for col in range(SIZE):
                     inp_host[row * SIZE + col] = row * SIZE + col
 
-        out_tensor = LayoutTensor[mut=True, dtype, out_layout](
-            out.unsafe_ptr()
-        )
+        out_tensor = LayoutTensor[mut=True, dtype, out_layout](out.unsafe_ptr())
         inp_tensor = LayoutTensor[mut=False, dtype, in_layout](inp.unsafe_ptr())
 
         ctx.enqueue_function[axis_sum[in_layout, out_layout]](

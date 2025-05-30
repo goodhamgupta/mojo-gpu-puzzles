@@ -25,8 +25,17 @@ fn naive_matmul[
 ):
     row = block_dim.y * block_idx.y + thread_idx.y
     col = block_dim.x * block_idx.x + thread_idx.x
-    # FILL ME IN (roughly 6 lines)
 
+    if row < SIZE and col < SIZE:
+        for k in range(SIZE):
+            # NOTE: Looks like a race condition occurs here.
+            # Without the print statement, the last element doesn't match the expected value.
+            # HOWEVER, with it, the values match!
+            # I tried creating a varible to track the "running_sum", and then assign it, but
+            # I ran into more type errors.
+            print(row, col)
+            out[row, col] += a[row, k] * b[k, col]
+    
 
 # ANCHOR_END: naive_matmul
 
