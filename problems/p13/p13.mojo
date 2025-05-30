@@ -1,6 +1,7 @@
 from sys import sizeof
 from testing import assert_equal
 from gpu.host import DeviceContext
+from math import log2
 
 # ANCHOR: axis_sum
 from gpu import thread_idx, block_idx, block_dim, barrier
@@ -21,13 +22,33 @@ alias out_layout = Layout.row_major(BATCH, 1)
 fn axis_sum[
     in_layout: Layout, out_layout: Layout
 ](
-    out: LayoutTensor[mut=False, dtype, out_layout],
+    out: LayoutTensor[mut=True, dtype, out_layout],
     a: LayoutTensor[mut=False, dtype, in_layout],
     size: Int,
 ):
-    global_i = block_dim.x * block_idx.x + thread_idx.x
     local_i = thread_idx.x
     batch = block_idx.y
+    shared = tb[dtype]().row_major[TPB]().shared().alloc()
+
+    if local_i < SIZE:
+        shared[local_i] = a[batch, local_i]
+
+    barrier()
+
+    var stride = TPB // 2
+    while stride > 0:
+        if local_i < stride and local_i + stride < SIZE:
+            shared[local_i] += shared[local_i + stride]
+        barrier()
+        stride //= 2
+
+    if local_i == 0:
+        # This layout indexing was incorrect.
+        # Layout shape is [BATCH, 1]
+        # Hence, it should be indexed with 2 dimensions!
+        out[batch, 0] = shared[0]
+
+
     # FILL ME IN (roughly 15 lines)
 
 
@@ -43,7 +64,7 @@ def main():
                 for col in range(SIZE):
                     inp_host[row * SIZE + col] = row * SIZE + col
 
-        out_tensor = LayoutTensor[mut=False, dtype, out_layout](
+        out_tensor = LayoutTensor[mut=True, dtype, out_layout](
             out.unsafe_ptr()
         )
         inp_tensor = LayoutTensor[mut=False, dtype, in_layout](inp.unsafe_ptr())
