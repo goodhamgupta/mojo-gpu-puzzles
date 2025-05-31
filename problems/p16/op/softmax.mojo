@@ -30,6 +30,7 @@ fn softmax_gpu_kernel[
     shared_max = tb[dtype]().row_major[TPB]().shared().alloc()
     shared_sum = tb[dtype]().row_major[TPB]().shared().alloc()
 
+    # Step 1: Find max
     var thread_max: Scalar[dtype] = min_finite[dtype]()
     if global_id < input_size:
         thread_max = rebind[Scalar[dtype]](input[global_id])
@@ -39,6 +40,7 @@ fn softmax_gpu_kernel[
 
     stride = TPB // 2
 
+    # Parallel reduction to find max
     while stride > 0:
         if local_id < input_size:
             shared_max[local_id] = max(
@@ -46,6 +48,32 @@ fn softmax_gpu_kernel[
             )
         barrier()
         stride //= 2
+
+    block_max = shared_max[0]
+
+    # Step 2: Compute exponential values using the numerically stable formula
+    var exp_val: out.element_type = 0.0
+
+    if global_id < input_size:
+        exp_val = rebind[Scalar[dtype]](input[global_id] - block_max)
+        out[global_id] = exp_val
+
+    shared_sum[local_id] = exp_val
+    barrier()
+
+    stride = TPB // 2
+
+    # Parallel reduction to find sum
+    while stride > 0:
+        if local_id < input_size:
+            shared_sum[local_id] += shared_sum[local_id + stride]
+        barrier()
+        stride //= 2
+
+    block_sum = shared_sum[0]
+
+    if global_id < input_size:
+        out[global_id] = out[global_id] / block_sum
 
     # FILL IN (roughly 31 lines)
     ...
