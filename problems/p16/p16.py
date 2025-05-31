@@ -17,6 +17,7 @@ def softmax(
     dtype = DType.float32
     input_tensor = Tensor.from_numpy(input).to(device)
     mojo_kernels = Path(__file__).parent / "op"
+    print("MOJO KERNELS")
 
     with Graph(
         "softmax_graph",

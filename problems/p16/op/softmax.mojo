@@ -25,6 +25,28 @@ fn softmax_gpu_kernel[
     out: LayoutTensor[mut=True, dtype, layout],
     input: LayoutTensor[mut=False, dtype, layout],
 ):
+    global_id = block_dim.x * block_idx.x + thread_idx.x
+    local_id = thread_idx.x
+    shared_max = tb[dtype]().row_major[TPB]().shared().alloc()
+    shared_sum = tb[dtype]().row_major[TPB]().shared().alloc()
+
+    var thread_max: Scalar[dtype] = min_finite[dtype]()
+    if global_id < input_size:
+        thread_max = rebind[Scalar[dtype]](input[global_id])
+
+    shared_max[local_id] = thread_max
+    barrier()
+
+    stride = TPB // 2
+
+    while stride > 0:
+        if local_id < input_size:
+            shared_max[local_id] = max(
+                shared_max[local_id], shared_max[local_id + stride]
+            )
+        barrier()
+        stride //= 2
+
     # FILL IN (roughly 31 lines)
     ...
 
