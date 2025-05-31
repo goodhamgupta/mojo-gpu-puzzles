@@ -55,7 +55,7 @@ fn softmax_gpu_kernel[
     var exp_val: out.element_type = 0.0
 
     if global_id < input_size:
-        exp_val = rebind[Scalar[dtype]](input[global_id] - block_max)
+        exp_val = rebind[Scalar[dtype]](exp(input[global_id] - block_max))
         out[global_id] = exp_val
 
     shared_sum[local_id] = exp_val
