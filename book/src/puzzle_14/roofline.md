@@ -28,7 +28,11 @@ Two "roofs" bound all achievable performance:
 | **Memory roof**  | \\(P = B_{\text{peak}} \cdot I\\) | Sloped line; performance limited by memory bandwidth |
 | **Compute roof** | \\(P = P_{\text{peak}}\\)         | Horizontal line; performance limited by compute throughput |
 
-The **critical intensity** \\(\Large I^* = \frac{P_{\text{peak}}}{B_{\text{peak}}}\\) marks where a kernel transitions from memory-bound (\\(I < I^*\\)) to compute-bound (\\(I > I^*\\)).
+The **critical intensity**
+
+\\[\Large I^* = \frac{P_{\text{peak}}}{B_{\text{peak}}}\\]
+
+marks where a kernel transitions from memory-bound (\\(I < I^* \\)) to compute-bound (\\(I > I^* \\)).
 
 ## 2. Hardware example: NVIDIA A100 specifications
 

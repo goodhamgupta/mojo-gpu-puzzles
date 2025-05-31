@@ -64,3 +64,6 @@ p17 = [
     { cmd = "mojo package problems/p17/op -o problems/p17/op.mojopkg" },
     { cmd = "python problems/p17/p17.py" }
 ]
+
+
+p20 = "mojo problems/p20/p20.mojo"
