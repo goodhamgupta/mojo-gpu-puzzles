@@ -31,11 +31,22 @@ fn softmax_gpu_kernel[
     shared_sum = tb[dtype]().row_major[TPB]().shared().alloc()
 
     # Step 1: Find max
-    var thread_max: Scalar[dtype] = min_finite[dtype]()
+    # var thread_max: Scalar[dtype] = min_finite[dtype]()
     if global_id < input_size:
-        thread_max = rebind[Scalar[dtype]](input[global_id])
+        # thread_max = rebind[Scalar[dtype]](input[global_id])
 
-    shared_max[local_id] = thread_max
+        # Note: I'm a bit confused about this approach.
+        # By default, it looks like we are just copying over the
+        # value in the input to the shared memory.
+        # For the current thread, it's own value is considered as "max" for now
+        # Instead of assigning it to another variable and doing the
+        # "rebind" shenanigans, we could just assign it directly to the shared memory?
+        # Turns out, this also works fine. I see minor changes in running time(from ~0.306s to ~0.313s),
+        # but the overall implementation is still correct. 💪
+        # I'm not sure why. There is no redundant memory access pattern here from what I can tell.
+        shared_max[local_id] = input[global_id]
+
+    # shared_max[local_id] = thread_max
     barrier()
 
     stride = TPB // 2
@@ -57,6 +68,9 @@ fn softmax_gpu_kernel[
     if global_id < input_size:
         exp_val = rebind[Scalar[dtype]](exp(input[global_id] - block_max))
         out[global_id] = exp_val
+        # NOTE: Here, directly assigning the value to the output DOESN'T WORK
+        # It gives only nan/inf values
+        # out[global_id] = exp(input[global_id] - block_max)
 
     shared_sum[local_id] = exp_val
     barrier()
