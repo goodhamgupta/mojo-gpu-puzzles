@@ -91,6 +91,22 @@ fn softmax_cpu_kernel[
     out: LayoutTensor[dtype, layout, MutableAnyOrigin],
     input: LayoutTensor[dtype, layout, MutableAnyOrigin],
 ):
+    # Step 1: Find maximum element
+    var max_val: out.element_type = 0.0
+    var running_sum: out.element_type = 0.0
+    for idx in range(input_size):
+        if input[idx] > max_val:
+            max_val = input[idx]
+    
+    # Step 2: Find softmax
+    for idx in range(input_size):
+        out[idx] = exp(input[idx] - max_val)
+        running_sum += out[idx]
+
+    # Step 3: Compute final values
+    for idx in range(input_size):
+        out[idx] = out[idx] / running_sum
+    
     # FILL IN (roughly 10 lines)
     ...
 
