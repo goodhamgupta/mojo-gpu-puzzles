@@ -319,13 +319,22 @@ struct AttentionCustomOp:
 
             # Step 4: Reshape scores from (1, seq_len) to (seq_len,) for softmax
             # FILL ME IN 1 line
-            var scores_tensor = scores_2d.reshape[Layout.row_major(seq_len)]()
+            var weights = scores_2d.reshape[layout_scores]()
 
             # Step 5: Apply softmax to get attention weights
             # FILL ME IN 1 function call
+            gpu_ctx.enqueue_function[
+                softmax_kernel[layout_scores, seq_len, dtype]
+            ](
+                weights,
+                weights,
+                grid_dim=scores_blocks_per_grid,
+                block_dim=matmul_threads_per_block,
+            )
 
             # Step 6: Reshape weights from (seq_len,) to (1, seq_len) for final matmul
             # FILL ME IN 1 line
+            var weights_2d = weights.reshape[layout_weights_2d]()
 
             # Step 7: Compute final result using matmul: weights @ V = (1, seq_len) @ (seq_len, d) -> (1, d)
             # Reuse out_tensor reshaped as (1, d) for result
