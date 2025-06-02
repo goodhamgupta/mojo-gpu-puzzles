@@ -319,6 +319,7 @@ struct AttentionCustomOp:
 
             # Step 4: Reshape scores from (1, seq_len) to (seq_len,) for softmax
             # FILL ME IN 1 line
+            var scores_tensor = scores_2d.reshape[Layout.row_major(seq_len)]()
 
             # Step 5: Apply softmax to get attention weights
             # FILL ME IN 1 function call
