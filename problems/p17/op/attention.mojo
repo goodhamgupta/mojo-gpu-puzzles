@@ -304,6 +304,18 @@ struct AttentionCustomOp:
             # GPU: Uses matrix multiplication to compute all Q · K[i] scores in parallel
             # Reuse scores_weights_buf as (1, seq_len) for scores
             # FILL ME IN 2 lines
+            var scores_2d = LayoutTensor[
+                mut=True, dtype, layout_scores_2d, MutableAnyOrigin
+            ](scores_weights_buf.unsafe_ptr())
+            gpu_ctx.enqueue_function[
+                matmul_idiomatic_tiled[layout_scores_2d, 1, SEQ_LEN, d, dtype]
+            ](
+                scores_2d,
+                q_tensor_2d,
+                k_t,
+                grid_dim=scores_blocks_per_grid,
+                block_dim=matmul_threads_per_block,
+            )
 
             # Step 4: Reshape scores from (1, seq_len) to (seq_len,) for softmax
             # FILL ME IN 1 line
