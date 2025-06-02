@@ -75,8 +75,21 @@ fn transpose_kernel[
     out: LayoutTensor[mut=True, dtype, layout_out, MutableAnyOrigin],
     inp: LayoutTensor[mut=False, dtype, layout_in, MutableAnyOrigin],
 ):
-    # FILL ME IN (roughly 18 lines)
-    ...
+    var local_row = thread_idx.y
+    var local_col = thread_idx.x
+    var global_row = block_idx.y * block_dim.y + thread_idx.y
+    var global_col = block_idx.x * block_dim.x + thread_idx.x
+
+    shared = tb[dtype]().row_major[TPB, TPB]().shared().alloc()
+
+    # Phase 1: Load from global memory into shared memory with normal indexing
+    if global_col < rows * cols:
+        shared[local_row, local_col] = inp[global_row, global_col]
+
+    barrier()
+
+    if global_row < cols and global_col < rows:
+        out[global_row, global_col] = shared[local_col, local_row]
 
 
 # ANCHOR_END: transpose_kernel
@@ -273,9 +286,14 @@ struct AttentionCustomOp:
 
             # Step 1: Reshape Q from (d,) to (1, d) - no buffer needed
             # FILL ME IN 1 line
+            var q_tensor_2d = q_tensor.reshape[layout_q_2d]()
 
             # Step 2: Transpose K from (seq_len, d) to K^T (d, seq_len)
             # FILL ME IN 1 function call
+            gpu_ctx.enqueue_function[
+                transpose_kernel[layout_k, layout_k_t, seq_len, d, dtype]
+            ](k_t, k, grid_dim=SEQ_LEN, block_dim=d)
+            gpu_ctx.synchronize()
 
             # Step 3: Compute attention scores using matmul: Q @ K^T = (1, d) @ (d, seq_len) -> (1, seq_len)
             # GPU: Uses matrix multiplication to compute all Q · K[i] scores in parallel
