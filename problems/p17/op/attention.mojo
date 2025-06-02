@@ -286,7 +286,7 @@ struct AttentionCustomOp:
 
             # Step 1: Reshape Q from (d,) to (1, d) - no buffer needed
             # FILL ME IN 1 line
-            var q_tensor_2d = q_tensor.reshape[layout_q_2d]()
+            q_tensor_2d = q_tensor.reshape[layout_q_2d]()
 
             # Step 2: Transpose K from (seq_len, d) to K^T (d, seq_len)
             # FILL ME IN 1 function call
@@ -328,8 +328,8 @@ struct AttentionCustomOp:
             ](
                 weights,
                 weights,
-                grid_dim=scores_blocks_per_grid,
-                block_dim=matmul_threads_per_block,
+                grid_dim=(1,1),
+                block_dim=(seq_len, 1),
             )
 
             # Step 6: Reshape weights from (seq_len,) to (1, seq_len) for final matmul
@@ -339,6 +339,17 @@ struct AttentionCustomOp:
             # Step 7: Compute final result using matmul: weights @ V = (1, seq_len) @ (seq_len, d) -> (1, d)
             # Reuse out_tensor reshaped as (1, d) for result
             # FILL ME IN 2 lines
+
+            result_2d = out_tensor.reshape[layout_result_2d]()
+            gpu_ctx.enqueue_function[
+                matmul_idiomatic_tiled[layout_weights_2d, 1, SEQ_LEN, d, dtype]
+            ](
+                result_2d,
+                weights_2d,
+                v_tensor,
+                grid_dim=result_blocks_per_grid,
+                block_dim=matmul_threads_per_block,
+            )
 
             # ANCHOR_END: attention_orchestration
 

@@ -265,6 +265,6 @@ if __name__ == "__main__":
         print(str(e))
 
     print(f"\nOutput vector norms:")
-    print(f"  CPU: {np.linalg.norm(cpu_array):.6f}")
+    # print(f"  CPU: {np.linalg.norm(cpu_array):.6f}")
     print(f"  GPU: {np.linalg.norm(gpu_array):.6f}")
     print(f"  Expected: {np.linalg.norm(expected_result):.6f}")
