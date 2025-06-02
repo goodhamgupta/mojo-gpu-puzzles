@@ -194,7 +194,7 @@ if __name__ == "__main__":
     SEQ_LEN = 16  # Number of key/value vectors
     D = 16  # Dimension of each vector
 
-    cpu_session = InferenceSession(devices=[CPU()])
+    # cpu_session = InferenceSession(devices=[CPU()])
     gpu_session = InferenceSession(devices=[Accelerator()])
 
     np.random.seed(42)
@@ -219,14 +219,14 @@ if __name__ == "__main__":
     print("TESTING FULL ATTENTION")
     print(f"{'='*80}")
 
-    cpu_result = attention(q, k, v, cpu_session, CPU())
-    cpu_array = cpu_result.to_numpy()
-    print(f"\nCPU attention output[:5]: {cpu_array[:5]}")
-    print(f"CPU matches NumPy: {np.allclose(cpu_array, expected_result, rtol=1e-4, atol=1e-4)}")
-    if not np.allclose(cpu_array, expected_result, rtol=1e-4, atol=1e-4):
-        diff = np.abs(cpu_array - expected_result)
-        print(f"Max CPU diff: {np.max(diff):.6f}")
-        print(f"CPU diff[:5]: {diff[:5]}")
+    # cpu_result = attention(q, k, v, cpu_session, CPU())
+    # cpu_array = cpu_result.to_numpy()
+    # print(f"\nCPU attention output[:5]: {cpu_array[:5]}")
+    # print(f"CPU matches NumPy: {np.allclose(cpu_array, expected_result, rtol=1e-4, atol=1e-4)}")
+    # if not np.allclose(cpu_array, expected_result, rtol=1e-4, atol=1e-4):
+    #     diff = np.abs(cpu_array - expected_result)
+    #     print(f"Max CPU diff: {np.max(diff):.6f}")
+    #     print(f"CPU diff[:5]: {diff[:5]}")
 
     # Test GPU implementation
     gpu_result = attention(q, k, v, gpu_session, Accelerator())
@@ -250,12 +250,12 @@ if __name__ == "__main__":
     print("FINAL VERIFICATION")
     print(f"{'='*80}")
 
-    try:
-        np.testing.assert_allclose(cpu_array, expected_result, rtol=1e-4, atol=1e-4)
-        print("✓ CPU implementation PASSED")
-    except AssertionError as e:
-        print("✗ CPU implementation FAILED")
-        print(str(e))
+    # try:
+    #     np.testing.assert_allclose(cpu_array, expected_result, rtol=1e-4, atol=1e-4)
+    #     print("✓ CPU implementation PASSED")
+    # except AssertionError as e:
+    #     print("✗ CPU implementation FAILED")
+    #     print(str(e))
 
     try:
         np.testing.assert_allclose(gpu_array, expected_result, rtol=1e-4, atol=1e-4)

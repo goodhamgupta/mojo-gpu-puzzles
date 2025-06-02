@@ -292,7 +292,12 @@ struct AttentionCustomOp:
             # FILL ME IN 1 function call
             gpu_ctx.enqueue_function[
                 transpose_kernel[layout_k, layout_k_t, seq_len, d, dtype]
-            ](k_t, k, grid_dim=SEQ_LEN, block_dim=d)
+            ](
+                k_t,
+                k,
+                grid_dim=transpose_blocks_per_grid,
+                block_dim=matmul_threads_per_block,
+            )
             gpu_ctx.synchronize()
 
             # Step 3: Compute attention scores using matmul: Q @ K^T = (1, d) @ (d, seq_len) -> (1, seq_len)
