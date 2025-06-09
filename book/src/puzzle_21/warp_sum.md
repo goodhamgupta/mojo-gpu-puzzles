@@ -14,7 +14,7 @@ In this puzzle, you'll master:
 - **Lane ID management** and conditional writes
 
 The mathematical operation is a dot product (inner product):
-\\[\Large \text{out}[0] = \sum_{i=0}^{N-1} a[i] \times b[i]\\]
+\\[\Large \text{output}[0] = \sum_{i=0}^{N-1} a[i] \times b[i]\\]
 
 But the implementation teaches fundamental patterns for all warp-level GPU programming in Mojo.
 
@@ -86,7 +86,7 @@ Transform the complex traditional approach into a simple warp kernel using `warp
 You need to complete the `simple_warp_dot_product` function with **6 lines or fewer**:
 
 ```mojo
-fn simple_warp_dot_product[...](out, a, b):
+fn simple_warp_dot_product[...](output, a, b):
     global_i = block_dim.x * block_idx.x + thread_idx.x
     # FILL IN (6 lines at most)
 ```
@@ -121,7 +121,7 @@ total = warp_sum(partial_product)
 ### 4. **Writing the result**
 ```mojo
 if lane_id() == 0:
-    out[0] = total
+    output[0] = total
 ```
 
 **Why only lane 0?** All lanes have the same `total` value after `warp_sum()`, but we only want to write once to avoid race conditions.
@@ -258,10 +258,10 @@ else:
 total = warp_sum(partial_product)
 
 if lane_id() == 0:
-    out.store[1](0, 0, total)
+    output.store[1](0, 0, total)
 ```
 
-**Storage pattern:** `out.store[1](0, 0, total)` stores 1 element at position (0, 0) in the output tensor.
+**Storage pattern:** `output.store[1](0, 0, total)` stores 1 element at position (0, 0) in the output tensor.
 
 **Same warp logic:** `warp_sum()` and lane 0 writing work identically in functional approach.
 

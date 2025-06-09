@@ -11,7 +11,7 @@ alias dtype = DType.float32
 
 
 fn broadcast_add(
-    out: UnsafePointer[Scalar[dtype]],
+    output: UnsafePointer[Scalar[dtype]],
     a: UnsafePointer[Scalar[dtype]],
     b: UnsafePointer[Scalar[dtype]],
     size: Int,

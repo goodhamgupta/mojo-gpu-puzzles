@@ -21,7 +21,7 @@ In this puzzle, you'll master:
 - **Performance trade-offs** between manual control and safety
 
 The same mathematical operation as before:
-\\[\Large \text{out}[i] = a[i] + b[i]\\]
+\\[\Large \text{output}[i] = a[i] + b[i]\\]
 
 But with sophisticated vectorization strategies for maximum performance.
 
@@ -61,8 +61,8 @@ This calculates the exact global position for each SIMD vector within the chunk.
 
 ### 3. **Direct tensor access**
 ```mojo
-a_vec = a.load[simd_width](global_start, 0)  # Load from global tensor
-out.store[simd_width](global_start, 0, ret)  # Store to global tensor
+a_vec = a.load[simd_width](global_start, 0)     # Load from global tensor
+output.store[simd_width](global_start, 0, ret)  # Store to global tensor
 ```
 Note: Access the original tensors, not the tile views.
 

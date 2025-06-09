@@ -21,7 +21,7 @@ alias SIMD_WIDTH = simdwidthof[dtype, target = _get_gpu_target()]()
 fn elementwise_add[
     layout: Layout, dtype: DType, simd_width: Int, rank: Int, size: Int
 ](
-    out: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
+    output: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
     a: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     b: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     ctx: DeviceContext,
@@ -53,7 +53,7 @@ fn tiled_elementwise_add[
     size: Int,
     tile_size: Int,
 ](
-    out: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
+    output: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
     a: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     b: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     ctx: DeviceContext,
@@ -65,7 +65,7 @@ fn tiled_elementwise_add[
     ](indices: IndexList[rank]) capturing -> None:
         tile_id = indices[0]
         print("tile_id:", tile_id)
-        out_tile = out.tile[tile_size](tile_id)
+        out_tile = output.tile[tile_size](tile_id)
         a_tile = a.tile[tile_size](tile_id)
         b_tile = b.tile[tile_size](tile_id)
 
@@ -88,7 +88,7 @@ fn manual_vectorized_tiled_elementwise_add[
     size: Int,
     tile_size: Int,
 ](
-    out: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
+    output: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
     a: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     b: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     ctx: DeviceContext,
@@ -103,7 +103,7 @@ fn manual_vectorized_tiled_elementwise_add[
     ](indices: IndexList[rank]) capturing -> None:
         tile_id = indices[0]
         print("tile_id:", tile_id)
-        out_tile = out.tile[chunk_size](tile_id)
+        out_tile = output.tile[chunk_size](tile_id)
         a_tile = a.tile[chunk_size](tile_id)
         b_tile = b.tile[chunk_size](tile_id)
 
@@ -129,7 +129,7 @@ fn vectorize_within_tiles_elementwise_add[
     size: Int,
     tile_size: Int,
 ](
-    out: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
+    output: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
     a: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     b: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     ctx: DeviceContext,

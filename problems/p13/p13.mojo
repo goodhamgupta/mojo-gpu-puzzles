@@ -21,7 +21,7 @@ alias out_layout = Layout.row_major(BATCH, 1)
 fn axis_sum[
     in_layout: Layout, out_layout: Layout
 ](
-    out: LayoutTensor[mut=False, dtype, out_layout],
+    output: LayoutTensor[mut=False, dtype, out_layout],
     a: LayoutTensor[mut=False, dtype, in_layout],
     size: Int,
 ):

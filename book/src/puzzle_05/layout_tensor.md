@@ -2,7 +2,7 @@
 
 ## Overview
 
-Implement a kernel that broadcast adds 1D LayoutTensor `a` and 1D LayoutTensor `b` and stores it in 2D LayoutTensor `out`.
+Implement a kernel that broadcast adds 1D LayoutTensor `a` and 1D LayoutTensor `b` and stores it in 2D LayoutTensor `output`.
 
 **Note:** _You have more threads than positions._
 

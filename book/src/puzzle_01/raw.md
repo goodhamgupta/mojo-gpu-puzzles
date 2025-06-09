@@ -7,7 +7,7 @@ In this puzzle, you'll learn about:
 
 - **Parallelism**: Each thread executes independently
 - **Thread indexing**: Access element at position `i = thread_idx.x`
-- **Memory access**: Read from `a[i]` and write to `out[i]`
+- **Memory access**: Read from `a[i]` and write to `output[i]`
 - **Data independence**: Each output depends only on its corresponding input
 
 ## Code to complete
@@ -24,7 +24,7 @@ In this puzzle, you'll learn about:
 
 1. Store `thread_idx.x` in `i`
 2. Add 10 to `a[i]`
-3. Store result in `out[i]`
+3. Store result in `output[i]`
 </div>
 </details>
 
@@ -72,6 +72,6 @@ expected: HostBuffer([10.0, 11.0, 12.0, 13.0])
 
 This solution:
 - Gets thread index with `i = thread_idx.x`
-- Adds 10 to input value: `out[i] = a[i] + 10.0`
+- Adds 10 to input value: `output[i] = a[i] + 10.0`
 </div>
 </details>

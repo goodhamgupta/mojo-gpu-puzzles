@@ -11,14 +11,14 @@ Let's look at the challenges we've faced so far:
 
 ```mojo
 # Puzzle 1: Simple indexing
-out[i] = a[i] + 10.0
+output[i] = a[i] + 10.0
 
 # Puzzle 2: Multiple array management
-out[i] = a[i] + b[i]
+output[i] = a[i] + b[i]
 
 # Puzzle 3: Bounds checking
 if i < size:
-    out[i] = a[i] + 10.0
+    output[i] = a[i] + 10.0
 ```
 
 As dimensions grow, code becomes more complex:
@@ -26,7 +26,7 @@ As dimensions grow, code becomes more complex:
 # Traditional 2D indexing for row-major 2D matrix
 idx = row * WIDTH + col
 if row < height and col < width:
-    out[idx] = a[idx] + 10.0
+    output[idx] = a[idx] + 10.0
 ```
 
 ## The solution: A peek at LayoutTensor

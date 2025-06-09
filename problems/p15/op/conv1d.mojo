@@ -16,7 +16,7 @@ fn conv1d_kernel[
     conv_size: Int,
     dtype: DType = DType.float32,
 ](
-    out: LayoutTensor[mut=True, dtype, out_layout],
+    output: LayoutTensor[mut=True, dtype, out_layout],
     input: LayoutTensor[mut=True, dtype, in_layout],
     kernel: LayoutTensor[mut=True, dtype, conv_layout],
 ):
@@ -41,14 +41,14 @@ fn conv1d_kernel[
     barrier()
 
     if global_i < input_size:
-        var local_sum: out.element_type = 0
+        var local_sum: output.element_type = 0
 
         @parameter
         for j in range(conv_size):
             if local_i + j < TPB + conv_size - 1:
                 local_sum += shared_a[local_i + j] * shared_b[j]
 
-        out[global_i] = local_sum
+        output[global_i] = local_sum
 
 
 # ANCHOR_END: conv1d_kernel
@@ -72,17 +72,17 @@ struct Conv1DCustomOp:
         conv_size: Int,
         dtype: DType = DType.float32,
     ](
-        out: OutputTensor[rank=1],
-        input: InputTensor[type = out.type, rank = out.rank],
-        kernel: InputTensor[type = out.type, rank = out.rank],
+        output: OutputTensor[rank=1],
+        input: InputTensor[dtype = output.dtype, rank = output.rank],
+        kernel: InputTensor[dtype = output.dtype, rank = output.rank],
         # the context is needed for some GPU calls
         ctx: DeviceContextPtr,
     ) raises:
-        out_tensor = out.to_layout_tensor()
+        output_tensor = output.to_layout_tensor()
         input_tensor = input.to_layout_tensor()
         kernel_tensor = kernel.to_layout_tensor()
         alias in_layout = input_tensor.layout
-        alias out_layout = out_tensor.layout
+        alias output_layout = output_tensor.layout
         alias conv_layout = kernel_tensor.layout
 
         @parameter
@@ -90,9 +90,11 @@ struct Conv1DCustomOp:
             gpu_ctx = ctx.get_device_context()
             # making sure the output tensor is zeroed out before the kernel is called
             gpu_ctx.enqueue_memset(
-                DeviceBuffer[out.type](
+                DeviceBuffer[output.dtype](
                     gpu_ctx,
-                    rebind[UnsafePointer[Scalar[out.type]]](out_tensor.ptr),
+                    rebind[UnsafePointer[Scalar[output.dtype]]](
+                        output_tensor.ptr
+                    ),
                     input_size,
                     owning=False,
                 ),

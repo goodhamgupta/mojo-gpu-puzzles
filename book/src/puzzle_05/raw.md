@@ -1,6 +1,6 @@
 ## Overview
 
-Implement a kernel that broadcast adds vector `a` and vector `b` and stores it in 2D matrix `out`.
+Implement a kernel that broadcast adds vector `a` and vector `b` and stores it in 2D matrix `output`.
 
 **Note:** _You have more threads than positions._
 

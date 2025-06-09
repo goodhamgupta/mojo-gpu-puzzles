@@ -2,7 +2,7 @@
 
 ## Overview
 
-Implement a kernel that adds 10 to each position of 2D _LayoutTensor_ `a` and stores it in 2D _LayoutTensor_ `out`.
+Implement a kernel that adds 10 to each position of 2D _LayoutTensor_ `a` and stores it in 2D _LayoutTensor_ `output`.
 
 **Note:** _You have more threads than positions_.
 
@@ -83,6 +83,6 @@ expected: HostBuffer([10.0, 11.0, 12.0, 13.0])
 This solution:
 - Gets 2D thread indices with `row = thread_idx.y`, `col = thread_idx.x`
 - Guards against out-of-bounds with `if row < size and col < size`
-- Uses `LayoutTensor`'s 2D indexing: `out[row, col] = a[row, col] + 10.0`
+- Uses `LayoutTensor`'s 2D indexing: `output[row, col] = a[row, col] + 10.0`
 </div>
 </details>

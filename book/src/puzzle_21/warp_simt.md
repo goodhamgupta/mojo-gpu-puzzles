@@ -11,7 +11,7 @@ A **warp** is a group of 32 (or 64) GPU threads that execute **the same instruct
 from gpu.warp import sum
 # All 32 threads in the warp execute this simultaneously:
 var my_value = input[my_thread_id]     # Each gets different data
-var warp_total = sum(my_value)    # All contribute to one sum
+var warp_total = sum(my_value)         # All contribute to one sum
 ```
 
 What just happened? Instead of 32 separate threads doing complex coordination, the **warp** automatically synchronized them to produce a single result. This is **SIMT (Single Instruction, Multiple Thread)** execution.

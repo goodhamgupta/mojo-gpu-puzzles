@@ -20,7 +20,7 @@ In this puzzle, you'll master:
 - **Performance trade-offs** between parallelism and memory efficiency
 
 The same mathematical operation as elementwise:
-\\[\Large \text{out}[i] = a[i] + b[i]\\]
+\\[\Large \text{output}[i] = a[i] + b[i]\\]
 
 But with a completely different execution strategy optimized for memory hierarchy.
 
@@ -57,7 +57,7 @@ Check out the [LayoutTensor `.tile` documentation](https://docs.modular.com/mojo
 
 ```mojo
 tile_id = indices[0]  # Each thread gets one tile to process
-out_tile = out.tile[tile_size](tile_id)
+out_tile = output.tile[tile_size](tile_id)
 a_tile = a.tile[tile_size](tile_id)
 b_tile = b.tile[tile_size](tile_id)
 ```
@@ -171,7 +171,7 @@ Tiling represents a fundamental shift in how we think about parallel processing:
 
 ```mojo
 tile_id = indices[0]
-out_tile = out.tile[tile_size](tile_id)
+out_tile = output.tile[tile_size](tile_id)
 a_tile = a.tile[tile_size](tile_id)
 b_tile = b.tile[tile_size](tile_id)
 ```

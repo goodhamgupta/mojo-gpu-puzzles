@@ -14,7 +14,7 @@ alias dtype = DType.float32
 
 
 fn pooling(
-    out: UnsafePointer[Scalar[dtype]],
+    output: UnsafePointer[Scalar[dtype]],
     a: UnsafePointer[Scalar[dtype]],
     size: Int,
 ):

@@ -1,5 +1,5 @@
 ## Overview
-Implement a kernel that adds 10 to each position of 2D square matrix `a` and stores it in 2D square matrix `out`.
+Implement a kernel that adds 10 to each position of 2D square matrix `a` and stores it in 2D square matrix `output`.
 
 **Note:** _You have more threads than positions_.
 
@@ -80,6 +80,6 @@ expected: HostBuffer([10.0, 11.0, 12.0, 13.0])
 This solution:
 1. Get 2D indices:  `row = thread_idx.y`, `col = thread_idx.x`
 2. Add guard: `if row < size and col < size`
-3. Inside guard: `out[row * size + col] = a[row * size + col] + 10.0`
+3. Inside guard: `output[row * size + col] = a[row * size + col] + 10.0`
 </div>
 </details>

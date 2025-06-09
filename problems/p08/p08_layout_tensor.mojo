@@ -17,7 +17,7 @@ alias layout = Layout.row_major(SIZE)
 fn add_10_shared_layout_tensor[
     layout: Layout
 ](
-    out: LayoutTensor[mut=True, dtype, layout],
+    output: LayoutTensor[mut=True, dtype, layout],
     a: LayoutTensor[mut=True, dtype, layout],
     size: Int,
 ):

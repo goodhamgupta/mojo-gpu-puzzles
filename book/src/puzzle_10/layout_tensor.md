@@ -1,6 +1,6 @@
 ## Overview
 
-Implement a kernel that computes the dot-product of 1D LayoutTensor `a` and 1D LayoutTensor `b` and stores it in 1D LayoutTensor `out` (single number).
+Implement a kernel that computes the dot-product of 1D LayoutTensor `a` and 1D LayoutTensor `b` and stores it in 1D LayoutTensor `output` (single number).
 
 **Note:** _You have 1 thread per position. You only need 2 global reads per thread and 1 global write per thread block._
 
@@ -43,7 +43,7 @@ Notes:
 1. Create shared memory with tensor builder
 2. Store `a[global_i] * b[global_i]` in `shared[local_i]`
 3. Use parallel reduction pattern with `barrier()`
-4. Let thread 0 write final result to `out[0]`
+4. Let thread 0 write final result to `output[0]`
 </div>
 </details>
 

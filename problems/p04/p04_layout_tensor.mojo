@@ -12,7 +12,7 @@ alias layout = Layout.row_major(SIZE, SIZE)
 
 
 fn add_10_2d(
-    out: LayoutTensor[mut=True, dtype, layout],
+    output: LayoutTensor[mut=True, dtype, layout],
     a: LayoutTensor[mut=True, dtype, layout],
     size: Int,
 ):

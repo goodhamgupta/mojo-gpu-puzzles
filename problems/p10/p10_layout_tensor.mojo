@@ -19,7 +19,7 @@ alias out_layout = Layout.row_major(1)
 fn dot_product[
     in_layout: Layout, out_layout: Layout
 ](
-    out: LayoutTensor[mut=True, dtype, out_layout],
+    output: LayoutTensor[mut=True, dtype, out_layout],
     a: LayoutTensor[mut=True, dtype, in_layout],
     b: LayoutTensor[mut=True, dtype, in_layout],
     size: Int,

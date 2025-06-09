@@ -1,6 +1,6 @@
 # Simple Case with Single Block
 
-Implement a kernel that computes a 1D convolution between 1D LayoutTensor `a` and 1D LayoutTensor `b` and stores it in 1D LayoutTensor `out`.
+Implement a kernel that computes a 1D convolution between 1D LayoutTensor `a` and 1D LayoutTensor `b` and stores it in 1D LayoutTensor `output.
 
 **Note:** _You need to handle the general case. You only need 2 global reads and 1 global write per thread._
 
@@ -105,12 +105,12 @@ Kernel b:        [0  1  2]
 
 2. **Convolution Process** for each position i:
    ```txt
-   out[0] = a[0]*b[0] + a[1]*b[1] + a[2]*b[2] = 0*0 + 1*1 + 2*2 = 5
-   out[1] = a[1]*b[0] + a[2]*b[1] + a[3]*b[2] = 1*0 + 2*1 + 3*2 = 8
-   out[2] = a[2]*b[0] + a[3]*b[1] + a[4]*b[2] = 2*0 + 3*1 + 4*2 = 11
-   out[3] = a[3]*b[0] + a[4]*b[1] + a[5]*b[2] = 3*0 + 4*1 + 5*2 = 14
-   out[4] = a[4]*b[0] + a[5]*b[1] + 0*b[2]    = 4*0 + 5*1 + 0*2 = 5
-   out[5] = a[5]*b[0] + 0*b[1]   + 0*b[2]     = 5*0 + 0*1 + 0*2 = 0
+   output[0] = a[0]*b[0] + a[1]*b[1] + a[2]*b[2] = 0*0 + 1*1 + 2*2 = 5
+   output[1] = a[1]*b[0] + a[2]*b[1] + a[3]*b[2] = 1*0 + 2*1 + 3*2 = 8
+   output[2] = a[2]*b[0] + a[3]*b[1] + a[4]*b[2] = 2*0 + 3*1 + 4*2 = 11
+   output[3] = a[3]*b[0] + a[4]*b[1] + a[5]*b[2] = 3*0 + 4*1 + 5*2 = 14
+   output[4] = a[4]*b[0] + a[5]*b[1] + 0*b[2]    = 4*0 + 5*1 + 0*2 = 5
+   output[5] = a[5]*b[0] + 0*b[1]   + 0*b[2]     = 5*0 + 0*1 + 0*2 = 0
    ```
 
 ### Implementation Details
@@ -128,7 +128,7 @@ Kernel b:        [0  1  2]
    - The safe and correct implementation:
      ```mojo
      if global_i < a_size:
-         var local_sum: out.element_type = 0  # Using var allows type inference
+         var local_sum: output.element_type = 0  # Using var allows type inference
          @parameter  # Unrolls loop at compile time since CONV is constant
          for j in range(CONV):
              if local_i + j < SIZE:
@@ -136,7 +136,7 @@ Kernel b:        [0  1  2]
      ```
 
 2. **Key Implementation Features**:
-   - Uses `var` for proper type inference with `out.element_type`
+   - Uses `var` for proper type inference with `output.element_type`
    - Employs `@parameter` decorator to unroll the convolution loop at compile time
    - Maintains strict bounds checking for memory safety
    - Leverages LayoutTensor's type system for better code safety

@@ -1,6 +1,6 @@
 ## Overview
 
-Implement a kernel that adds 10 to each position of a 1D ayoutTensor `a` and stores it in 1D LayoutTensor `out`.
+Implement a kernel that adds 10 to each position of a 1D ayoutTensor `a` and stores it in 1D LayoutTensor `output`.
 
 **Note:** _You have fewer threads per block than the size of `a`._
 
@@ -117,7 +117,7 @@ expected: HostBuffer([11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0])
 This solution demonstrates how LayoutTensor simplifies shared memory usage while maintaining performance:
 
 1. **Memory hierarchy with LayoutTensor**
-   - Global tensors: `a` and `out` (slow, visible to all blocks)
+   - Global tensors: `a` and `output` (slow, visible to all blocks)
    - Shared tensor: `shared` (fast, thread-block local)
    - Example for 8 elements with 4 threads per block:
      ```txt
@@ -136,7 +136,7 @@ This solution demonstrates how LayoutTensor simplifies shared memory usage while
      barrier()    ↓         ↓        ↓         ↓   # Wait for all loads
      ```
    - Process phase: Each thread adds 10 to its shared tensor value
-   - Result: `out[global_i] = shared[local_i] + 10 = 11`
+   - Result: `output[global_i] = shared[local_i] + 10 = 11`
 
 3. **LayoutTensor benefits**
    - Shared memory allocation:

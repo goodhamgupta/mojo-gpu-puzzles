@@ -33,7 +33,7 @@ alias out_layout = Layout.row_major(1)
 fn traditional_dot_product_p10_style[
     in_layout: Layout, out_layout: Layout, size: Int
 ](
-    out: LayoutTensor[mut=True, dtype, out_layout],
+    output: LayoutTensor[mut=True, dtype, out_layout],
     a: LayoutTensor[mut=False, dtype, in_layout],
     b: LayoutTensor[mut=False, dtype, in_layout],
 ):
@@ -59,7 +59,7 @@ fn traditional_dot_product_p10_style[
         stride //= 2
 
     if local_i == 0:
-        out[0] = shared[0]
+        output[0] = shared[0]
 
 
 # ANCHOR_END: traditional_approach_from_p10
@@ -71,7 +71,7 @@ from gpu.warp import sum as warp_sum
 fn simple_warp_dot_product[
     in_layout: Layout, out_layout: Layout, size: Int
 ](
-    out: LayoutTensor[mut=True, dtype, out_layout],
+    output: LayoutTensor[mut=True, dtype, out_layout],
     a: LayoutTensor[mut=False, dtype, in_layout],
     b: LayoutTensor[mut=False, dtype, in_layout],
 ):
@@ -86,7 +86,9 @@ fn simple_warp_dot_product[
 fn functional_warp_dot_product[
     layout: Layout, dtype: DType, simd_width: Int, rank: Int, size: Int
 ](
-    out: LayoutTensor[mut=True, dtype, Layout.row_major(1), MutableAnyOrigin],
+    output: LayoutTensor[
+        mut=True, dtype, Layout.row_major(1), MutableAnyOrigin
+    ],
     a: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     b: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     ctx: DeviceContext,

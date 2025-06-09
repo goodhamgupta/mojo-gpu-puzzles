@@ -1,6 +1,6 @@
 ## Overview
 
-Implement a kernel that computes the dot-product of vector `a` and vector `b` and stores it in `out` (single number).
+Implement a kernel that computes the dot-product of vector `a` and vector `b` and stores it in `output` (single number).
 
 **Note:** _You have 1 thread per position. You only need 2 global reads per thread and 1 global write per thread block._
 
@@ -46,7 +46,7 @@ handle that challenge later.*
 1. Store `a[global_i] * b[global_i]` in `shared[local_i]`
 2. Call `barrier()` to synchronize
 3. Use thread 0 to sum all products in shared memory
-4. Write final sum to `out[0]`
+4. Write final sum to `output[0]`
 </div>
 </details>
 
