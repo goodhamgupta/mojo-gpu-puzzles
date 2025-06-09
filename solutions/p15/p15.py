@@ -48,6 +48,7 @@ def conv_1d(
         output = ops.custom(
             name="conv1d",
             values=[input_value, kernel_value],
+            device=DeviceRef.from_device(device),
             out_types=[
                 TensorType(
                     dtype=input_value.tensor.dtype,

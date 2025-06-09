@@ -21,7 +21,9 @@ def test_softmax():
         expected = ctx.enqueue_create_host_buffer[DType.float32](
             SIZE
         ).enqueue_fill(0)
-
+        expected_tensor = LayoutTensor[mut=True, dtype, layout](
+            expected.unsafe_ptr()
+        )
         # Initialize input with more reasonable values
         with inp.map_to_host() as inp_host:
             for i in range(SIZE):
@@ -31,14 +33,11 @@ def test_softmax():
             for i in range(SIZE):
                 print(inp_host[i], end=" ")
             print()
+            # Create layout tensors for CPU calculation
+            input_host_tensor = LayoutTensor[mut=True, dtype, layout](
+                inp_host.unsafe_ptr()
+            )
 
-        # Create layout tensors for CPU calculation
-        input_host_tensor = LayoutTensor[mut=True, dtype, layout](
-            inp_host.unsafe_ptr()
-        )
-        expected_tensor = LayoutTensor[mut=True, dtype, layout](
-            expected.unsafe_ptr()
-        )
         # for GPU testing
         output_tensor = LayoutTensor[mut=True, dtype, layout](out.unsafe_ptr())
         input_tensor = LayoutTensor[mut=True, dtype, layout](inp.unsafe_ptr())

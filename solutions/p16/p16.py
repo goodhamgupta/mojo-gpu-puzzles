@@ -36,6 +36,7 @@ def softmax(
         output = ops.custom(
             name="softmax",
             values=[input_value],
+            device=DeviceRef.from_device(device),
             out_types=[
                 TensorType(
                     dtype=input_value.tensor.dtype,
