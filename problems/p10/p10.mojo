@@ -14,7 +14,7 @@ alias dtype = DType.float32
 
 
 fn dot_product(
-    out: UnsafePointer[Scalar[dtype]],
+    output: UnsafePointer[Scalar[dtype]],
     a: UnsafePointer[Scalar[dtype]],
     b: UnsafePointer[Scalar[dtype]],
     size: Int,

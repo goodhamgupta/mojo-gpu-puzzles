@@ -21,7 +21,7 @@ alias SIMD_WIDTH = simdwidthof[dtype, target = _get_gpu_target()]()
 fn elementwise_add[
     layout: Layout, dtype: DType, simd_width: Int, rank: Int, size: Int
 ](
-    out: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
+    output: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
     a: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     b: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     ctx: DeviceContext,
@@ -41,7 +41,7 @@ fn elementwise_add[
         # print(
         #     "idx:", idx, ", a_simd:", a_simd, ", b_simd:", b_simd, " sum:", ret
         # )
-        out.store[simd_width](idx, 0, ret)
+        output.store[simd_width](idx, 0, ret)
 
     elementwise[add, SIMD_WIDTH, target="gpu"](a.size(), ctx)
 
@@ -61,7 +61,7 @@ fn tiled_elementwise_add[
     size: Int,
     tile_size: Int,
 ](
-    out: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
+    output: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
     a: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     b: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     ctx: DeviceContext,
@@ -73,7 +73,7 @@ fn tiled_elementwise_add[
     ](indices: IndexList[rank]) capturing -> None:
         tile_id = indices[0]
 
-        out_tile = out.tile[tile_size](tile_id)
+        output_tile = output.tile[tile_size](tile_id)
         a_tile = a.tile[tile_size](tile_id)
         b_tile = b.tile[tile_size](tile_id)
 
@@ -82,7 +82,7 @@ fn tiled_elementwise_add[
             a_vec = a_tile.load[simd_width](i, 0)
             b_vec = b_tile.load[simd_width](i, 0)
             ret = a_vec + b_vec
-            out_tile.store[simd_width](i, 0, ret)
+            output_tile.store[simd_width](i, 0, ret)
 
     num_tiles = (size + tile_size - 1) // tile_size
     elementwise[process_tiles, 1, target="gpu"](num_tiles, ctx)
@@ -101,7 +101,7 @@ fn manual_vectorized_tiled_elementwise_add[
     size: Int,
     tile_size: Int,
 ](
-    out: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
+    output: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
     a: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     b: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     ctx: DeviceContext,
@@ -116,7 +116,7 @@ fn manual_vectorized_tiled_elementwise_add[
     ](indices: IndexList[rank]) capturing -> None:
         tile_id = indices[0]
 
-        out_tile = out.tile[chunk_size](tile_id)
+        output_tile = output.tile[chunk_size](tile_id)
         a_tile = a.tile[chunk_size](tile_id)
         b_tile = b.tile[chunk_size](tile_id)
 
@@ -129,7 +129,7 @@ fn manual_vectorized_tiled_elementwise_add[
             ret = a_vec + b_vec
             # print("tile:", tile_id, "simd_group:", i, "global_start:", global_start, "a_vec:", a_vec, "b_vec:", b_vec, "result:", ret)
 
-            out.store[simd_width](global_start, 0, ret)
+            output.store[simd_width](global_start, 0, ret)
 
     # Number of tiles needed: each tile processes chunk_size elements
     num_tiles = (size + chunk_size - 1) // chunk_size
@@ -151,7 +151,7 @@ fn vectorize_within_tiles_elementwise_add[
     size: Int,
     tile_size: Int,
 ](
-    out: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
+    output: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
     a: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     b: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     ctx: DeviceContext,
@@ -174,7 +174,7 @@ fn vectorize_within_tiles_elementwise_add[
                 a_vec = a.load[width](global_idx, 0)
                 b_vec = b.load[width](global_idx, 0)
                 result = a_vec + b_vec
-                out.store[width](global_idx, 0, result)
+                output.store[width](global_idx, 0, result)
 
         # Use vectorize within each tile
         vectorize[vectorized_add, simd_width](actual_tile_size)

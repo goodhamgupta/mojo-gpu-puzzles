@@ -1,7 +1,7 @@
 # Puzzle 4: 2D Map
 
 ## Overview
-Implement a kernel that adds 10 to each position of 2D square matrix `a` and stores it in 2D square matrix `out`.
+Implement a kernel that adds 10 to each position of 2D square matrix `a` and stores it in 2D square matrix `output`.
 
 **Note:** _You have more threads than positions_.
 
@@ -14,7 +14,7 @@ Implement a kernel that adds 10 to each position of 2D square matrix `a` and sto
 - Memory layout patterns
 
 For each position \\((i,j)\\):
-\\[\Large out[i,j] = a[i,j] + 10\\]
+\\[\Large output[i,j] = a[i,j] + 10\\]
 
 > ## Thread indexing convention
 >

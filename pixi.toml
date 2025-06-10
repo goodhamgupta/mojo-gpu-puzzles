@@ -74,7 +74,9 @@ p16 = { cmd = "python problems/p16/p16.py", depends-on = ["p16-package"] }
 
 p17 = "mojo package problems/p17/op -o problems/p17/op.mojopkg && python problems/p17/p17.py"
 
-p20 = "mojo solutions/p20/p20.mojo"
+p20 = "mojo problems/p20/p20.mojo"
+
+p21 = "mojo problems/p21/p21.mojo"
 
 all-animations = { cmd = "echo 'All animations generated!'", depends-on = ["viz01", "viz02", "viz03", "viz04", "viz05", "viz06", "viz07", "viz08", "viz09", "viz10", "viz11", "viz12", "viz13", "viz14", "rooflineviz"] }
 

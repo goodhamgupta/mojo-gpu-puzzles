@@ -24,19 +24,19 @@ fn matmul_idiomatic_tiled[
     inner: Int,
     dtype: DType = DType.float32,
 ](
-    out: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
+    output: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     a: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     b: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
 ):
     """Idiomatic tiled matrix multiplication from p14."""
     # Get the tile of the output matrix `out` that this thread block is responsible for
-    out_tile = out.tile[TPB, TPB](block_idx.y, block_idx.x)
+    output_tile = output.tile[TPB, TPB](block_idx.y, block_idx.x)
     a_shared = tb[dtype]().row_major[TPB, TPB]().shared().alloc()
     b_shared = tb[dtype]().row_major[TPB, TPB]().shared().alloc()
     local_row = thread_idx.y
     local_col = thread_idx.x
 
-    var acc: out.element_type = 0
+    var acc: output.element_type = 0
 
     alias load_a_layout = Layout.row_major(1, TPB)
     alias load_b_layout = Layout.row_major(TPB, 1)
@@ -61,7 +61,7 @@ fn matmul_idiomatic_tiled[
         block_idx.y * TPB + local_row < rows
         and block_idx.x * TPB + local_col < cols
     ):
-        out_tile[local_row, local_col] = acc
+        output_tile[local_row, local_col] = acc
 
 
 # ANCHOR: transpose_kernel_solution
@@ -72,7 +72,7 @@ fn transpose_kernel[
     cols: Int,
     dtype: DType = DType.float32,
 ](
-    out: LayoutTensor[mut=True, dtype, layout_out, MutableAnyOrigin],
+    output: LayoutTensor[mut=True, dtype, layout_out, MutableAnyOrigin],
     inp: LayoutTensor[mut=False, dtype, layout_in, MutableAnyOrigin],
 ):
     """Transpose matrix using shared memory tiling for coalesced access."""
@@ -97,7 +97,7 @@ fn transpose_kernel[
     # Store data from shared memory to global memory (coalesced write)
     # Note: we transpose the shared memory access pattern
     if out_row < cols and out_col < rows:
-        out[out_row, out_col] = shared_tile[local_col, local_row]
+        output[out_row, out_col] = shared_tile[local_col, local_row]
 
 
 # ANCHOR_END: transpose_kernel_solution
@@ -109,7 +109,7 @@ fn softmax_kernel[
     seq_len: Int,
     dtype: DType = DType.float32,
 ](
-    out: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
+    output: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
     scores: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
 ):
     """Apply softmax to attention scores - exact p16 pattern."""
@@ -140,7 +140,7 @@ fn softmax_kernel[
     var exp_val: Scalar[dtype] = 0.0
     if global_i < seq_len:
         exp_val = rebind[Scalar[dtype]](exp(scores[global_i] - block_max))
-        out[global_i] = exp_val
+        output[global_i] = exp_val
 
     shared_sum[local_i] = exp_val
     barrier()
@@ -159,7 +159,7 @@ fn softmax_kernel[
 
     # Normalize by sum
     if global_i < seq_len:
-        out[global_i] = out[global_i] / block_sum
+        output[global_i] = output[global_i] / block_sum
 
 
 # CPU implementation for vector attention
@@ -172,7 +172,7 @@ fn attention_cpu_kernel[
     d: Int,
     dtype: DType = DType.float32,
 ](
-    out: LayoutTensor[dtype, layout_out, MutableAnyOrigin],
+    output: LayoutTensor[dtype, layout_out, MutableAnyOrigin],
     q: LayoutTensor[dtype, layout_q, MutableAnyOrigin],
     k: LayoutTensor[dtype, layout_k, MutableAnyOrigin],
     v: LayoutTensor[dtype, layout_v, MutableAnyOrigin],
@@ -210,7 +210,7 @@ fn attention_cpu_kernel[
             weighted_sum = weighted_sum + weights[i] * rebind[Float32](
                 v[i, dim]
             )
-        out[dim] = rebind[Scalar[dtype]](weighted_sum)
+        output[dim] = rebind[Scalar[dtype]](weighted_sum)
 
 
 @compiler.register("attention")
@@ -222,10 +222,10 @@ struct AttentionCustomOp:
         d: Int,
         dtype: DType = DType.float32,
     ](
-        out: OutputTensor[type=dtype, rank=1],  # Output vector (d,)
-        q: InputTensor[type=dtype, rank=1],  # Query vector (d,)
-        k: InputTensor[type=dtype, rank=2],  # Key matrix (seq_len, d)
-        v: InputTensor[type=dtype, rank=2],  # Value matrix (seq_len, d)
+        output: OutputTensor[rank=1],  # Output vector (d,)
+        q: InputTensor[rank=1],  # Query vector (d,)
+        k: InputTensor[rank=2],  # Key matrix (seq_len, d)
+        v: InputTensor[rank=2],  # Value matrix (seq_len, d)
         ctx: DeviceContextPtr,
     ) raises:
         # Define layouts
@@ -236,9 +236,9 @@ struct AttentionCustomOp:
         alias layout_scores = Layout.row_major(seq_len)
 
         # Convert to layout tensors
-        var out_tensor = rebind[
+        var output_tensor = rebind[
             LayoutTensor[dtype, layout_out, MutableAnyOrigin]
-        ](out.to_layout_tensor())
+        ](output.to_layout_tensor())
         var q_tensor = rebind[LayoutTensor[dtype, layout_q, MutableAnyOrigin]](
             q.to_layout_tensor()
         )
@@ -340,7 +340,7 @@ struct AttentionCustomOp:
 
             # Step 7: Compute final result using matmul: weights @ V = (1, seq_len) @ (seq_len, d) -> (1, d)
             # Reuse out_tensor reshaped as (1, d) for result
-            result_2d = out_tensor.reshape[layout_result_2d]()
+            result_2d = output_tensor.reshape[layout_result_2d]()
             gpu_ctx.enqueue_function[
                 matmul_idiomatic_tiled[layout_weights_2d, 1, d, seq_len, dtype]
             ](
@@ -356,7 +356,7 @@ struct AttentionCustomOp:
         elif target == "cpu":
             attention_cpu_kernel[
                 layout_q, layout_k, layout_v, layout_out, seq_len, d, dtype
-            ](out_tensor, q_tensor, k_tensor, v_tensor)
+            ](output_tensor, q_tensor, k_tensor, v_tensor)
 
         else:
             raise Error("Unsupported target: " + target)

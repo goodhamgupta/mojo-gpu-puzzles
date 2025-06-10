@@ -3,7 +3,7 @@
 ## Overview
 
 GPU programming is all about parallelism. In this puzzle, each thread will process a single element of the input array independently.
-Implement a kernel that adds 10 to each position of vector `a` and stores it in vector `out`.
+Implement a kernel that adds 10 to each position of vector `a` and stores it in vector `output`.
 
 **Note:** _You have 1 thread per position._
 
@@ -16,7 +16,7 @@ Implement a kernel that adds 10 to each position of vector `a` and stores it in 
 - Array operations on GPU
 
 For each position \\(i\\):
-\\[\Large out[i] = a[i] + 10\\]
+\\[\Large output[i] = a[i] + 10\\]
 
 ## What we cover
 

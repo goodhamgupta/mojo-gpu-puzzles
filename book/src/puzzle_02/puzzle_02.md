@@ -2,7 +2,7 @@
 
 ## Overview
 
-Implement a kernel that adds together each position of vector `a` and vector `b` and stores it in `out`.
+Implement a kernel that adds together each position of vector `a` and vector `b` and stores it in `output`.
 
 **Note:** _You have 1 thread per position._
 
@@ -16,18 +16,18 @@ In this puzzle, you'll learn about:
 - Thread-to-data mapping across arrays
 - Memory access patterns with multiple arrays
 
-For each thread \\(i\\): \\[\Large out[i] = a[i] + b[i]\\]
+For each thread \\(i\\): \\[\Large output[i] = a[i] + b[i]\\]
 
 ### Memory access pattern
 
 ```txt
-Thread 0:  a[0] + b[0] → out[0]
-Thread 1:  a[1] + b[1] → out[1]
-Thread 2:  a[2] + b[2] → out[2]
+Thread 0:  a[0] + b[0] → output[0]
+Thread 1:  a[1] + b[1] → output[1]
+Thread 2:  a[2] + b[2] → output[2]
 ...
 ```
 
-💡 **Note**: Notice how we're now managing three arrays (`a`, `b`, `out`) in our kernel. As we progress to more complex operations, managing multiple array accesses will become increasingly challenging.
+💡 **Note**: Notice how we're now managing three arrays (`a`, `b`, `output`) in our kernel. As we progress to more complex operations, managing multiple array accesses will become increasingly challenging.
 
 ## Code to complete
 
@@ -43,7 +43,7 @@ Thread 2:  a[2] + b[2] → out[2]
 
 1. Store `thread_idx.x` in `i`
 2. Add `a[i]` and `b[i]`
-3. Store result in `out[i]`
+3. Store result in `output[i]`
 </div>
 </details>
 
@@ -91,7 +91,7 @@ expected: HostBuffer([0.0, 2.0, 4.0, 6.0])
 
 This solution:
 - Gets thread index with `i = thread_idx.x`
-- Adds values from both arrays: `out[i] = a[i] + b[i]`
+- Adds values from both arrays: `output[i] = a[i] + b[i]`
 </div>
 </details>
 

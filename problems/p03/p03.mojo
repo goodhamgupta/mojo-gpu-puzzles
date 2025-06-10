@@ -11,7 +11,7 @@ alias dtype = DType.float32
 
 
 fn add_10_guard(
-    out: UnsafePointer[Scalar[dtype]],
+    output: UnsafePointer[Scalar[dtype]],
     a: UnsafePointer[Scalar[dtype]],
     size: Int,
 ):

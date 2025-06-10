@@ -22,7 +22,7 @@ alias out_layout = Layout.row_major(BATCH, 1)
 fn axis_sum[
     in_layout: Layout, out_layout: Layout
 ](
-    out: LayoutTensor[mut=True, dtype, out_layout],
+    output: LayoutTensor[mut=False, dtype, out_layout],
     a: LayoutTensor[mut=False, dtype, in_layout],
     size: Int,
 ):
@@ -46,7 +46,7 @@ fn axis_sum[
         # This layout indexing was incorrect.
         # Layout shape is [BATCH, 1]
         # Hence, it should be indexed with 2 dimensions!
-        out[batch, 0] = shared[0]
+        output[batch, 0] = shared[0]
 
     # FILL ME IN (roughly 15 lines)
 

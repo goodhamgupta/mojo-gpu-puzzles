@@ -16,7 +16,7 @@ alias layout = Layout.row_major(SIZE)
 fn pooling[
     layout: Layout
 ](
-    out: LayoutTensor[mut=True, dtype, layout],
+    output: LayoutTensor[mut=True, dtype, layout],
     a: LayoutTensor[mut=True, dtype, layout],
     size: Int,
 ):
@@ -35,12 +35,12 @@ fn pooling[
 
     # Handle first two special cases
     if global_i == 0:
-        out[0] = shared[0]
+        output[0] = shared[0]
     elif global_i == 1:
-        out[1] = shared[0] + shared[1]
+        output[1] = shared[0] + shared[1]
     # Handle general case
     elif 1 < global_i < size:
-        out[global_i] = (
+        output[global_i] = (
             shared[local_i - 2] + shared[local_i - 1] + shared[local_i]
         )
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Implement a kernel that adds 10 to each position of a vector `a` and stores it in vector `out`.
+Implement a kernel that adds 10 to each position of a vector `a` and stores it in vector `output`.
 
 **Note:** _You have fewer threads per block than the size of `a`._
 

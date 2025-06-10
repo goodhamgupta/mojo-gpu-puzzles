@@ -16,7 +16,7 @@ alias layout = Layout.row_major(SIZE)
 fn pooling[
     layout: Layout
 ](
-    out: LayoutTensor[mut=True, dtype, layout],
+    output: LayoutTensor[mut=True, dtype, layout],
     a: LayoutTensor[mut=True, dtype, layout],
     size: Int,
 ):

@@ -11,7 +11,7 @@ alias dtype = DType.float32
 
 
 fn add(
-    out: UnsafePointer[Scalar[dtype]],
+    outout: UnsafePointer[Scalar[dtype]],
     a: UnsafePointer[Scalar[dtype]],
     b: UnsafePointer[Scalar[dtype]],
 ):

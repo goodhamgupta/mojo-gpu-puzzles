@@ -12,7 +12,6 @@ alias TPB = 128
 alias BLOCKS_PER_GRID = (1, 1)
 alias THREADS_PER_BLOCK = (TPB, 1)
 alias layout = Layout.row_major(SIZE)
-alias dtype = DType.float32
 
 
 # ANCHOR: softmax_gpu_kernel_solution
@@ -21,7 +20,7 @@ fn softmax_gpu_kernel[
     input_size: Int,
     dtype: DType = DType.float32,
 ](
-    out: LayoutTensor[mut=True, dtype, layout],
+    output: LayoutTensor[mut=True, dtype, layout],
     input: LayoutTensor[mut=False, dtype, layout],
 ):
     shared_max = tb[dtype]().row_major[TPB]().shared().alloc()
@@ -51,7 +50,7 @@ fn softmax_gpu_kernel[
     var exp_val: Scalar[dtype] = 0.0
     if global_i < input_size:
         exp_val = rebind[Scalar[dtype]](exp(input[global_i] - block_max))
-        out[global_i] = exp_val
+        output[global_i] = exp_val
 
     shared_sum[local_i] = exp_val
     barrier()
@@ -68,7 +67,7 @@ fn softmax_gpu_kernel[
 
     # Normalize by sum
     if global_i < input_size:
-        out[global_i] = out[global_i] / block_sum
+        output[global_i] = output[global_i] / block_sum
 
 
 # ANCHOR_END: softmax_gpu_kernel_solution
@@ -80,7 +79,7 @@ fn softmax_cpu_kernel[
     input_size: Int,
     dtype: DType = DType.float32,
 ](
-    out: LayoutTensor[dtype, layout, MutableAnyOrigin],
+    output: LayoutTensor[dtype, layout, MutableAnyOrigin],
     input: LayoutTensor[dtype, layout, MutableAnyOrigin],
 ):
     var max_val: Scalar[dtype] = min_finite[dtype]()
@@ -90,11 +89,11 @@ fn softmax_cpu_kernel[
     var sum_exp: Scalar[dtype] = 0.0
     for i in range(input_size):
         var exp_val = rebind[Scalar[dtype]](exp(input[i] - max_val))
-        out[i] = exp_val
+        output[i] = exp_val
         sum_exp += exp_val
 
     for i in range(input_size):
-        out[i] = out[i] / sum_exp
+        output[i] = output[i] / sum_exp
 
 
 # ANCHOR_END: softmax_cpu_kernel_solution
@@ -112,37 +111,38 @@ struct SoftmaxCustomOp:
         input_size: Int,
         dtype: DType = DType.float32,
     ](
-        out: OutputTensor[type=dtype, rank=1],
-        input: InputTensor[type = out.type, rank = out.rank],
+        output: OutputTensor[rank=1],
+        input: InputTensor[rank = output.rank],
         ctx: DeviceContextPtr,
     ) raises:
         # Note: rebind is necessary now but it shouldn't be!
-        var out_tensor = rebind[LayoutTensor[dtype, layout, MutableAnyOrigin]](
-            out.to_layout_tensor()
-        )
+        var output_tensor = rebind[
+            LayoutTensor[dtype, layout, MutableAnyOrigin]
+        ](output.to_layout_tensor())
         var input_tensor = rebind[
             LayoutTensor[dtype, layout, MutableAnyOrigin]
         ](input.to_layout_tensor())
+
         alias layout = input_tensor.layout
 
         @parameter
         if target == "gpu":
             gpu_ctx = ctx.get_device_context()
             # making sure the output tensor is zeroed out before the kernel is called
-            gpu_ctx.enqueue_memset(
-                DeviceBuffer[out.type](
-                    gpu_ctx,
-                    rebind[UnsafePointer[Scalar[out.type]]](out_tensor.ptr),
-                    input_size,
-                    owning=False,
-                ),
-                0,
-            )
+            # gpu_ctx.enqueue_memset(
+            #     DeviceBuffer[output.type](
+            #         gpu_ctx,
+            #         rebind[UnsafePointer[Scalar[output.type]]](out_tensor.ptr),
+            #         input_size,
+            #         owning=False,
+            #     ),
+            #     0,
+            # )
 
             gpu_ctx.enqueue_function[
                 softmax_gpu_kernel[layout, input_size, dtype]
             ](
-                out_tensor,
+                output_tensor,
                 input_tensor,
                 grid_dim=BLOCKS_PER_GRID,
                 block_dim=(TPB, 1),
@@ -150,7 +150,7 @@ struct SoftmaxCustomOp:
 
         elif target == "cpu":
             softmax_cpu_kernel[layout, input_size, dtype](
-                out_tensor, input_tensor
+                output_tensor, input_tensor
             )
         else:
             raise Error("Unsupported target: " + target)

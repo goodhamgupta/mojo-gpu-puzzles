@@ -33,7 +33,7 @@ Welcome to **Mojo 🔥 GPU Puzzles**, a hands-on guide to mastering GPU programm
 
 This book takes a unique approach to teaching GPU programming: learning by solving increasingly challenging puzzles. Rather than traditional textbook learning, you'll immediately start writing real GPU code and seeing the results.
 
-The early chapters of this book are heavily inspired by [GPU Puzzles](https://github.com/srush/GPU-Puzzles), an interactive CUDA learning project by Sasha Rush. This adaptation reimplements these concepts using Mojo's powerful abstractions and performance capabilities, while expanding on advanced topics with Mojo-specific optimizations.
+The first two chapters of this book are heavily inspired by [GPU Puzzles](https://github.com/srush/GPU-Puzzles), an interactive CUDA learning project. This adaptation reimplements these concepts using Mojo's powerful abstractions and performance capabilities, while expanding on advanced topics with Mojo-specific optimizations.
 
 ## Why Mojo 🔥 for GPU Programming?
 

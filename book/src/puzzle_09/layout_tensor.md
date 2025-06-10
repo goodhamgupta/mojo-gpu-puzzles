@@ -1,6 +1,6 @@
 ## Overview
 
-Implement a kernel that compute the running sum of the last 3 positions of 1D LayoutTensor `a` and stores it in 1D LayoutTensor `out`.
+Implement a kernel that compute the running sum of the last 3 positions of 1D LayoutTensor `a` and stores it in 1D LayoutTensor `output`.
 
 **Note:** _You have 1 thread per position. You only need 1 global read and 1 global write per thread._
 
@@ -106,11 +106,11 @@ The solution implements a sliding window sum using LayoutTensor with these key s
 2. **Boundary cases**
    - Position 0: Single element
      ```txt
-     out[0] = shared[0] = 0.0
+     output[0] = shared[0] = 0.0
      ```
    - Position 1: Sum of first two elements
      ```txt
-     out[1] = shared[0] + shared[1] = 0.0 + 1.0 = 1.0
+     output[1] = shared[0] + shared[1] = 0.0 + 1.0 = 1.0
      ```
 
 3. **Main window operation**

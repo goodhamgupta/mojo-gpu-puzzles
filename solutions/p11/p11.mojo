@@ -20,7 +20,7 @@ alias conv_layout = Layout.row_major(CONV)
 fn conv_1d_simple[
     in_layout: Layout, out_layout: Layout, conv_layout: Layout
 ](
-    out: LayoutTensor[mut=False, dtype, out_layout],
+    output: LayoutTensor[mut=False, dtype, out_layout],
     a: LayoutTensor[mut=False, dtype, in_layout],
     b: LayoutTensor[mut=False, dtype, conv_layout],
 ):
@@ -49,7 +49,7 @@ fn conv_1d_simple[
     if global_i < SIZE:
         # Note: using `var` allows us to include the type in the type inference
         # `out.element_type` is available in LayoutTensor
-        var local_sum: out.element_type = 0
+        var local_sum: output.element_type = 0
 
         # Note: `@parameter` decorator unrolls the loop at compile time given `CONV` is a compile-time constant
         # See: https://docs.modular.com/mojo/manual/decorators/parameter/#parametric-for-statement
@@ -59,7 +59,7 @@ fn conv_1d_simple[
             if local_i + j < SIZE:
                 local_sum += shared_a[local_i + j] * shared_b[j]
 
-        out[global_i] = local_sum
+        output[global_i] = local_sum
 
 
 # ANCHOR_END: conv_1d_simple_solution
@@ -77,7 +77,7 @@ alias conv_2_layout = Layout.row_major(CONV_2)
 fn conv_1d_block_boundary[
     in_layout: Layout, out_layout: Layout, conv_layout: Layout, dtype: DType
 ](
-    out: LayoutTensor[mut=False, dtype, out_layout],
+    output: LayoutTensor[mut=False, dtype, out_layout],
     a: LayoutTensor[mut=False, dtype, in_layout],
     b: LayoutTensor[mut=False, dtype, conv_layout],
 ):
@@ -106,14 +106,14 @@ fn conv_1d_block_boundary[
     barrier()
 
     if global_i < SIZE_2:
-        var local_sum: out.element_type = 0
+        var local_sum: output.element_type = 0
 
         @parameter
         for j in range(CONV_2):
             if local_i + j < TPB + CONV_2 - 1:
                 local_sum += shared_a[local_i + j] * shared_b[j]
 
-        out[global_i] = local_sum
+        output[global_i] = local_sum
 
 
 # ANCHOR_END: conv_1d_block_boundary_solution

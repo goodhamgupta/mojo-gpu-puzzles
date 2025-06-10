@@ -12,14 +12,14 @@ alias layout = Layout.row_major(SIZE, SIZE)
 
 # ANCHOR: add_10_2d_layout_tensor_solution
 fn add_10_2d(
-    out: LayoutTensor[mut=True, dtype, layout],
+    output: LayoutTensor[mut=True, dtype, layout],
     a: LayoutTensor[mut=True, dtype, layout],
     size: Int,
 ):
     row = thread_idx.y
     col = thread_idx.x
     if col < size and row < size:
-        out[row, col] = a[row, col] + 10.0
+        output[row, col] = a[row, col] + 10.0
 
 
 # ANCHOR_END: add_10_2d_layout_tensor_solution

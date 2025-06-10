@@ -11,14 +11,14 @@ alias dtype = DType.float32
 
 # ANCHOR: add_10_2d_solution
 fn add_10_2d(
-    out: UnsafePointer[Scalar[dtype]],
+    output: UnsafePointer[Scalar[dtype]],
     a: UnsafePointer[Scalar[dtype]],
     size: Int,
 ):
     row = thread_idx.y
     col = thread_idx.x
     if row < size and col < size:
-        out[row * size + col] = a[row * size + col] + 10.0
+        output[row * size + col] = a[row * size + col] + 10.0
 
 
 # ANCHOR_END: add_10_2d_solution

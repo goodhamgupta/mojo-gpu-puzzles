@@ -17,7 +17,7 @@ fn conv1d_kernel[
     conv_size: Int,
     dtype: DType = DType.float32,
 ](
-    out: LayoutTensor[mut=True, dtype, out_layout],
+    output: LayoutTensor[mut=True, dtype, out_layout],
     input: LayoutTensor[mut=True, dtype, in_layout],
     kernel: LayoutTensor[mut=True, dtype, conv_layout],
 ):
@@ -46,14 +46,14 @@ fn conv1d_kernel[
     barrier()
 
     if global_i < input_size:
-        var local_sum: out.element_type = 0
+        var local_sum: output.element_type = 0
 
         @parameter
         for j in range(conv_size):
             if local_i + j < TPB + conv_size - 1:
                 local_sum += shared_a[local_i + j] * shared_b[j]
 
-        out[global_i] = local_sum
+        output[global_i] = local_sum
 
 
 import compiler
@@ -73,39 +73,39 @@ struct Conv1DCustomOp:
         conv_size: Int,
         dtype: DType = DType.float32,
     ](
-        out: OutputTensor[rank=1],
-        input: InputTensor[type = out.type, rank = out.rank],
-        kernel: InputTensor[type = out.type, rank = out.rank],
+        output: OutputTensor[rank=1],
+        input: InputTensor[rank = output.rank],
+        kernel: InputTensor[rank = output.rank],
         # the context is needed for some GPU calls
         ctx: DeviceContextPtr,
     ) raises:
-        out_tensor = out.to_layout_tensor()
+        output_tensor = output.to_layout_tensor()
         input_tensor = input.to_layout_tensor()
         kernel_tensor = kernel.to_layout_tensor()
         alias in_layout = input_tensor.layout
-        alias out_layout = out_tensor.layout
+        alias out_layout = output_tensor.layout
         alias conv_layout = kernel_tensor.layout
 
         @parameter
         if target == "gpu":
             gpu_ctx = ctx.get_device_context()
             # making sure the output tensor is zeroed out before the kernel is called
-            gpu_ctx.enqueue_memset(
-                DeviceBuffer[out.type](
-                    gpu_ctx,
-                    rebind[UnsafePointer[Scalar[out.type]]](out_tensor.ptr),
-                    input_size,
-                    owning=False,
-                ),
-                0,
-            )
+            # gpu_ctx.enqueue_memset(
+            #     DeviceBuffer[output.type](
+            #         gpu_ctx,
+            #         rebind[UnsafePointer[Scalar[output.type]]](output_tensor.ptr),
+            #         input_size,
+            #         owning=False,
+            #     ),
+            #     0,
+            # )
             # ANCHOR: conv1d_custom_op_solution
             gpu_ctx.enqueue_function[
                 conv1d_kernel[
                     in_layout, out_layout, conv_layout, input_size, conv_size
                 ]
             ](
-                out_tensor,
+                output_tensor,
                 input_tensor,
                 kernel_tensor,
                 grid_dim=BLOCKS_PER_GRID,

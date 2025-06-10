@@ -22,7 +22,7 @@ fn softmax_gpu_kernel[
     input_size: Int,
     dtype: DType = DType.float32,
 ](
-    out: LayoutTensor[mut=True, dtype, layout],
+    output: LayoutTensor[mut=True, dtype, layout],
     input: LayoutTensor[mut=False, dtype, layout],
 ):
     global_id = block_dim.x * block_idx.x + thread_idx.x
@@ -102,7 +102,7 @@ fn softmax_cpu_kernel[
     input_size: Int,
     dtype: DType = DType.float32,
 ](
-    out: LayoutTensor[dtype, layout, MutableAnyOrigin],
+    output: LayoutTensor[dtype, layout, MutableAnyOrigin],
     input: LayoutTensor[dtype, layout, MutableAnyOrigin],
 ):
     # Step 1: Find maximum element
@@ -147,14 +147,14 @@ struct SoftmaxCustomOp:
         input_size: Int,
         dtype: DType = DType.float32,
     ](
-        out: OutputTensor[type=dtype, rank=1],
-        input: InputTensor[type = out.type, rank = out.rank],
+        output: OutputTensor[dtype=dtype, rank=1],
+        input: InputTensor[dtype = output.dtype, rank = output.rank],
         ctx: DeviceContextPtr,
     ) raises:
         # Note: rebind is necessary now but it shouldn't be!
-        var out_tensor = rebind[LayoutTensor[dtype, layout, MutableAnyOrigin]](
-            out.to_layout_tensor()
-        )
+        var output_tensor = rebind[
+            LayoutTensor[dtype, layout, MutableAnyOrigin]
+        ](output.to_layout_tensor())
         var input_tensor = rebind[
             LayoutTensor[dtype, layout, MutableAnyOrigin]
         ](input.to_layout_tensor())
@@ -165,9 +165,11 @@ struct SoftmaxCustomOp:
             gpu_ctx = ctx.get_device_context()
             # making sure the output tensor is zeroed out before the kernel is called
             gpu_ctx.enqueue_memset(
-                DeviceBuffer[out.type](
+                DeviceBuffer[output.dtype](
                     gpu_ctx,
-                    rebind[UnsafePointer[Scalar[out.type]]](out_tensor.ptr),
+                    rebind[UnsafePointer[Scalar[output.dtype]]](
+                        output_tensor.ptr
+                    ),
                     input_size,
                     owning=False,
                 ),
@@ -177,7 +179,7 @@ struct SoftmaxCustomOp:
             gpu_ctx.enqueue_function[
                 softmax_gpu_kernel[layout, input_size, dtype]
             ](
-                out_tensor,
+                output_tensor,
                 input_tensor,
                 grid_dim=BLOCKS_PER_GRID,
                 block_dim=(TPB, 1),
@@ -185,7 +187,7 @@ struct SoftmaxCustomOp:
 
         elif target == "cpu":
             softmax_cpu_kernel[layout, input_size, dtype](
-                out_tensor, input_tensor
+                output_tensor, input_tensor
             )
         else:
             raise Error("Unsupported target: " + target)

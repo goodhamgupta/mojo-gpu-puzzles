@@ -18,8 +18,8 @@ GPU Device
 ├── Grid (your entire problem)
 │   ├── Block 1 (group of threads, shared memory)
 │   │   ├── Warp 1 (32 threads, lockstep execution) --> We'll learn in Part VI
-│   │   │   ├── Thread 1 → Your Mojo function
-│   │   │   ├── Thread 2 → Your Mojo function
+│   │   │   ├── Thread 1 → SIMD
+│   │   │   ├── Thread 2 → SIMD
 │   │   │   └── ... (32 threads total)
 │   │   └── Warp 2 (32 threads)
 │   └── Block 2 (independent group)
@@ -31,7 +31,7 @@ GPU Device
 - Thread scheduling optimized automatically
 - Memory hierarchy optimization built-in
 
-💡 **Note**: While this Part focuses on functional patterns, **warp-level programming** and advanced GPU memory management will be covered in detail in **Part VI**.
+💡 **Note**: While this Part focuses on functional patterns, **warp-level programming** and advanced GPU memory management will be covered in detail in **[Part VI](../puzzle_21/puzzle_21.md)**.
 
 ### ⚡ **Four fundamental patterns**
 Master the complete spectrum of GPU functional programming:

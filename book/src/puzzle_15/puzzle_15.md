@@ -140,9 +140,9 @@ Let's break down how this works in the larger context:
    struct Conv1DCustomOp:
        @staticmethod
        fn execute[target: StaticString, input_size: Int, conv_size: Int, dtype: DType = DType.float32](
-           out: OutputTensor[rank=1],
-           input: InputTensor[type = out.type, rank = out.rank],
-           kernel: InputTensor[type = out.type, rank = out.rank],
+           output: OutputTensor[rank=1],
+           input: InputTensor[dtype = output.dtype, rank = output.rank],
+           kernel: InputTensor[dtype = output.dtype, rank = output.rank],
            ctx: DeviceContextPtr,
        ) raises:
            # Implementation
@@ -154,7 +154,7 @@ Let's break down how this works in the larger context:
 
 2. **Tensor Conversion**:
    ```mojo
-   out_tensor = out.to_layout_tensor()
+   output_tensor = output.to_layout_tensor()
    input_tensor = input.to_layout_tensor()
    kernel_tensor = kernel.to_layout_tensor()
    ```
@@ -192,9 +192,9 @@ The core of creating a custom operation is the `@compiler.register` decorator an
 struct Conv1DCustomOp:
     @staticmethod
     fn execute[...](
-        out: OutputTensor[rank=1],
-        input: InputTensor[type = out.type, rank = out.rank],
-        kernel: InputTensor[type = out.type, rank = out.rank],
+        output: OutputTensor[rank=1],
+        input: InputTensor[dtype = output.dtype, rank = output.rank],
+        kernel: InputTensor[type = output.dtype, rank = output.rank],
         ctx: DeviceContextPtr,
     ) raises:
         # Implementation here

@@ -1,6 +1,6 @@
 ## Overview
 
-Implement a kernel that adds 10 to each position of a vector `a` and stores it in `out`.
+Implement a kernel that adds 10 to each position of a vector `a` and stores it in `output`.
 
 **Note:** _You have fewer threads per block than the size of `a`._
 
@@ -43,7 +43,7 @@ Notes:
 
 1. Wait for shared memory load with `barrier()`
 2. Use `local_i` to access shared memory: `shared[local_i]`
-3. Use `global_i` for output: `out[global_i]`
+3. Use `global_i` for output: `output[global_i]`
 4. Add guard: `if global_i < size`
 </div>
 </details>
@@ -93,7 +93,7 @@ expected: HostBuffer([11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0])
 This solution demonstrates key concepts of shared memory usage in GPU programming:
 
 1. **Memory hierarchy**
-   - Global memory: `a` and `out` arrays (slow, visible to all blocks)
+   - Global memory: `a` and `output` arrays (slow, visible to all blocks)
    - Shared memory: `shared` array (fast, thread-block local)
    - Example for 8 elements with 4 threads per block:
      ```txt
@@ -112,7 +112,7 @@ This solution demonstrates key concepts of shared memory usage in GPU programmin
      barrier()    ↓         ↓        ↓         ↓   # Wait for all loads
      ```
    - Process phase: Each thread adds 10 to its shared memory value
-   - Result: `out[i] = shared[local_i] + 10 = 11`
+   - Result: `output[i] = shared[local_i] + 10 = 11`
 
 3. **Index mapping**
    - Global index: `block_dim.x * block_idx.x + thread_idx.x`

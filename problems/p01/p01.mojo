@@ -10,7 +10,9 @@ alias THREADS_PER_BLOCK = SIZE
 alias dtype = DType.float32
 
 
-fn add_10(out: UnsafePointer[Scalar[dtype]], a: UnsafePointer[Scalar[dtype]]):
+fn add_10(
+    output: UnsafePointer[Scalar[dtype]], a: UnsafePointer[Scalar[dtype]]
+):
     i = thread_idx.x
     out[i] = a[i] + 10
     # FILL ME IN (roughly 1 line)

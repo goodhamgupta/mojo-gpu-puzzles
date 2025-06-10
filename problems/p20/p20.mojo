@@ -8,14 +8,7 @@ from math import log2
 from algorithm.functional import elementwise, vectorize
 from sys import simdwidthof, argv
 from testing import assert_equal
-from benchmark import (
-    Bench,
-    BenchConfig,
-    Bencher,
-    BenchId,
-    ThroughputMeasure,
-    BenchMetric,
-)
+from benchmark import Bench, BenchConfig, Bencher, BenchId, keep
 
 # ANCHOR: elementwise_add
 alias SIZE = 1024
@@ -28,7 +21,7 @@ alias SIMD_WIDTH = simdwidthof[dtype, target = _get_gpu_target()]()
 fn elementwise_add[
     layout: Layout, dtype: DType, simd_width: Int, rank: Int, size: Int
 ](
-    out: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
+    output: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
     a: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     b: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     ctx: DeviceContext,
@@ -60,7 +53,7 @@ fn tiled_elementwise_add[
     size: Int,
     tile_size: Int,
 ](
-    out: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
+    output: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
     a: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     b: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     ctx: DeviceContext,
@@ -72,7 +65,7 @@ fn tiled_elementwise_add[
     ](indices: IndexList[rank]) capturing -> None:
         tile_id = indices[0]
         print("tile_id:", tile_id)
-        out_tile = out.tile[tile_size](tile_id)
+        out_tile = output.tile[tile_size](tile_id)
         a_tile = a.tile[tile_size](tile_id)
         b_tile = b.tile[tile_size](tile_id)
 
@@ -95,7 +88,7 @@ fn manual_vectorized_tiled_elementwise_add[
     size: Int,
     tile_size: Int,
 ](
-    out: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
+    output: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
     a: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     b: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     ctx: DeviceContext,
@@ -110,7 +103,7 @@ fn manual_vectorized_tiled_elementwise_add[
     ](indices: IndexList[rank]) capturing -> None:
         tile_id = indices[0]
         print("tile_id:", tile_id)
-        out_tile = out.tile[chunk_size](tile_id)
+        out_tile = output.tile[chunk_size](tile_id)
         a_tile = a.tile[chunk_size](tile_id)
         b_tile = b.tile[chunk_size](tile_id)
 
@@ -136,7 +129,7 @@ fn vectorize_within_tiles_elementwise_add[
     size: Int,
     tile_size: Int,
 ](
-    out: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
+    output: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
     a: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     b: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     ctx: DeviceContext,
@@ -198,6 +191,7 @@ fn benchmark_elementwise_parameterized[
         elementwise_add[layout, dtype, SIMD_WIDTH, rank, test_size](
             out_tensor, a_tensor, b_tensor, ctx
         )
+        keep(out.unsafe_ptr())
         ctx.synchronize()
 
     bench_ctx = DeviceContext()
@@ -229,6 +223,7 @@ fn benchmark_tiled_parameterized[
         tiled_elementwise_add[
             layout, dtype, SIMD_WIDTH, rank, test_size, tile_size
         ](out_tensor, a_tensor, b_tensor, ctx)
+        keep(out.unsafe_ptr())
         ctx.synchronize()
 
     bench_ctx = DeviceContext()
@@ -260,6 +255,7 @@ fn benchmark_manual_vectorized_parameterized[
         manual_vectorized_tiled_elementwise_add[
             layout, dtype, SIMD_WIDTH, 1, rank, test_size, tile_size
         ](out_tensor, a_tensor, b_tensor, ctx)
+        keep(out.unsafe_ptr())
         ctx.synchronize()
 
     bench_ctx = DeviceContext()
@@ -291,6 +287,7 @@ fn benchmark_vectorized_parameterized[
         vectorize_within_tiles_elementwise_add[
             layout, dtype, SIMD_WIDTH, 1, rank, test_size, tile_size
         ](out_tensor, a_tensor, b_tensor, ctx)
+        keep(out.unsafe_ptr())
         ctx.synchronize()
 
     bench_ctx = DeviceContext()
@@ -386,9 +383,12 @@ def main():
         bench.bench_function[benchmark_manual_vectorized_parameterized[16, 4]](
             BenchId("manual_vectorized_16_4")
         )
+        bench.bench_function[benchmark_vectorized_parameterized[16, 4]](
+            BenchId("vectorized_16_4")
+        )
 
-        print("Testing SIZE=128, TILE=16")
         print("-" * 80)
+        print("Testing SIZE=128, TILE=16")
         bench.bench_function[benchmark_elementwise_parameterized[128, 16]](
             BenchId("elementwise_128_16")
         )
@@ -399,10 +399,25 @@ def main():
             benchmark_manual_vectorized_parameterized[128, 16]
         ](BenchId("manual_vectorized_128_16"))
 
-        print("Testing SIZE=128, TILE=16, Vectorize within tiles")
         print("-" * 80)
+        print("Testing SIZE=128, TILE=16, Vectorize within tiles")
         bench.bench_function[benchmark_vectorized_parameterized[128, 16]](
             BenchId("vectorized_128_16")
+        )
+
+        print("-" * 80)
+        print("Testing SIZE=1048576 (1M), TILE=1024")
+        bench.bench_function[
+            benchmark_elementwise_parameterized[1048576, 1024]
+        ](BenchId("elementwise_1M_1024"))
+        bench.bench_function[benchmark_tiled_parameterized[1048576, 1024]](
+            BenchId("tiled_1M_1024")
+        )
+        bench.bench_function[
+            benchmark_manual_vectorized_parameterized[1048576, 1024]
+        ](BenchId("manual_vectorized_1M_1024"))
+        bench.bench_function[benchmark_vectorized_parameterized[1048576, 1024]](
+            BenchId("vectorized_1M_1024")
         )
 
         print(bench)

@@ -17,7 +17,7 @@ alias out_layout = Layout.row_major(1)
 fn dot_product[
     in_layout: Layout, out_layout: Layout
 ](
-    out: LayoutTensor[mut=True, dtype, out_layout],
+    output: LayoutTensor[mut=True, dtype, out_layout],
     a: LayoutTensor[mut=True, dtype, in_layout],
     b: LayoutTensor[mut=True, dtype, in_layout],
     size: Int,
@@ -44,7 +44,7 @@ fn dot_product[
 
     # Only thread 0 writes the final result
     if local_i == 0:
-        out[0] = shared[0]
+        output[0] = shared[0]
 
 
 # ANCHOR_END: dot_product_layout_tensor_solution

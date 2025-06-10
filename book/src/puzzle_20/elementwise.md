@@ -14,7 +14,7 @@ In this puzzle, you'll master:
 - **Capturing semantics** in nested functions
 
 The mathematical operation is simple element-wise addition:
-\\[\Large \text{out}[i] = a[i] + b[i]\\]
+\\[\Large \text{output}[i] = a[i] + b[i]\\]
 
 But the implementation teaches fundamental patterns for all GPU functional programming in Mojo.
 
@@ -77,7 +77,7 @@ This performs element-wise addition across the entire SIMD vector in parallel - 
 
 ### 5. **SIMD storing**
 ```mojo
-out.store[simd_width](idx, 0, result)  # Store 4 results at once (GPU-dependent)
+output.store[simd_width](idx, 0, result)  # Store 4 results at once (GPU-dependent)
 ```
 Writes the entire SIMD vector back to memory in one operation.
 
@@ -157,15 +157,15 @@ The `elementwise` function represents a paradigm shift from traditional GPU prog
 
 **Traditional CUDA/HIP approach:**
 ```mojo
-// Manual thread management
+# Manual thread management
 idx = thread_idx.x + block_idx.x * block_dim.x
 if idx < size:
-    out[idx] = a[idx] + b[idx];  // Scalar operation
+    output[idx] = a[idx] + b[idx];  // Scalar operation
 ```
 
 **Mojo functional approach:**
 ```mojo
-// Automatic management + SIMD vectorization
+# Automatic management + SIMD vectorization
 elementwise[add_function, simd_width, target="gpu"](size, ctx)
 ```
 
@@ -193,11 +193,11 @@ fn add[simd_width: Int, rank: Int](indices: IndexList[rank]) capturing -> None:
 ### 3. **SIMD execution model deep dive**
 
 ```mojo
-idx = indices[0]                          // Linear index: 0, 4, 8, 12... (GPU-dependent spacing)
-a_simd = a.load[simd_width](idx, 0)      // Load: [a[0:4], a[4:8], a[8:12]...] (4 elements per load)
-b_simd = b.load[simd_width](idx, 0)      // Load: [b[0:4], b[4:8], b[8:12]...] (4 elements per load)
-ret = a_simd + b_simd                    // SIMD: 4 additions in parallel (GPU-dependent)
-out.store[simd_width](idx, 0, ret)       // Store: 4 results simultaneously (GPU-dependent)
+idx = indices[0]                          # Linear index: 0, 4, 8, 12... (GPU-dependent spacing)
+a_simd = a.load[simd_width](idx, 0)       # Load: [a[0:4], a[4:8], a[8:12]...] (4 elements per load)
+b_simd = b.load[simd_width](idx, 0)       # Load: [b[0:4], b[4:8], b[8:12]...] (4 elements per load)
+ret = a_simd + b_simd                     # SIMD: 4 additions in parallel (GPU-dependent)
+output.store[simd_width](idx, 0, ret)     # Store: 4 results simultaneously (GPU-dependent)
 ```
 
 **Execution Hierarchy Visualization:**
@@ -288,10 +288,10 @@ This elementwise pattern is the building block for:
 **Compared to Traditional Approaches:**
 ```mojo
 // Traditional: Error-prone, verbose, hardware-specific
-__global__ void add_kernel(float* out, float* a, float* b, int size) {
+__global__ void add_kernel(float* output, float* a, float* b, int size) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < size) {
-        out[idx] = a[idx] + b[idx];  // No vectorization
+        output[idx] = a[idx] + b[idx];  // No vectorization
     }
 }
 

@@ -18,7 +18,7 @@ alias layout = Layout.row_major(SIZE)
 fn prefix_sum_simple[
     layout: Layout
 ](
-    out: LayoutTensor[mut=False, dtype, layout],
+    output: LayoutTensor[mut=False, dtype, layout],
     a: LayoutTensor[mut=False, dtype, layout],
     size: Int,
 ):
@@ -39,7 +39,7 @@ fn prefix_sum_simple[
         offset *= 2
 
     if global_i < size:
-        out[global_i] = shared[local_i]
+        output[global_i] = shared[local_i]
 
 
 # ANCHOR_END: prefix_sum_simple_solution
@@ -58,7 +58,7 @@ alias extended_layout = Layout.row_major(EXTENDED_SIZE)
 fn prefix_sum_local_phase[
     out_layout: Layout, in_layout: Layout
 ](
-    out: LayoutTensor[mut=False, dtype, out_layout],
+    output: LayoutTensor[mut=False, dtype, out_layout],
     a: LayoutTensor[mut=False, dtype, in_layout],
     size: Int,
     num_blocks: Int,
@@ -96,7 +96,7 @@ fn prefix_sum_local_phase[
     # Block 0 writes: [0,1,3,6,10,15,21,28]
     # Block 1 writes: [8,17,27,38,50,63,77,...]
     if global_i < size:
-        out[global_i] = shared[local_i]
+        output[global_i] = shared[local_i]
 
     # Store block sums in auxiliary space
     # Block 0: Thread 7 stores 28 at position size+0 (position 15)
@@ -105,13 +105,13 @@ fn prefix_sum_local_phase[
     #                                                           ↑  ↑
     #                                                     Block sums here
     if local_i == TPB - 1:
-        out[size + block_idx.x] = shared[local_i]
+        output[size + block_idx.x] = shared[local_i]
 
 
 # Kernel 2: Add block sums to their respective blocks
 fn prefix_sum_block_sum_phase[
     layout: Layout
-](out: LayoutTensor[mut=False, dtype, layout], size: Int):
+](output: LayoutTensor[mut=False, dtype, layout], size: Int):
     global_i = block_dim.x * block_idx.x + thread_idx.x
 
     # Second pass: add previous block's sum to each element
@@ -122,8 +122,8 @@ fn prefix_sum_block_sum_phase[
     # Final result combines both blocks:
     # [0,1,3,6,10,15,21,28, 36,45,55,66,78,91,105]
     if block_idx.x > 0 and global_i < size:
-        prev_block_sum = out[size + block_idx.x - 1]
-        out[global_i] += prev_block_sum
+        prev_block_sum = output[size + block_idx.x - 1]
+        output[global_i] += prev_block_sum
 
 
 # ANCHOR_END: prefix_sum_complete_solution

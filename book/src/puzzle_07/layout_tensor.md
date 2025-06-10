@@ -2,7 +2,7 @@
 
 ## Overview
 
-Implement a kernel that adds 10 to each position of 2D LayoutTensor `a` and stores it in 2D LayoutTensor `out`.
+Implement a kernel that adds 10 to each position of 2D LayoutTensor `a` and stores it in 2D LayoutTensor `output`.
 
 **Note:** _You have fewer threads per block than the size of `a` in both directions._
 

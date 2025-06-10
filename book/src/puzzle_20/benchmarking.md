@@ -4,7 +4,7 @@
 
 After mastering **elementwise**, **tiled**, **manual vectorization**, and **Mojo vectorize** patterns, it's time to measure their actual performance. This guide explains how to use the built-in benchmarking system in `p20.mojo` to scientifically compare these approaches and understand their performance characteristics.
 
-**Key insight:** _Theoretical analysis is valuable, but empirical benchmarking reveals the true performance story on your specific hardware._
+> **Key insight:** _Theoretical analysis is valuable, but empirical benchmarking reveals the true performance story on your specific hardware._
 
 ## Running benchmarks
 
@@ -79,526 +79,195 @@ Benchmarks completed!
 
 ## Benchmark configuration
 
-The benchmarking system uses Mojo's built-in `benchmark` module with carefully chosen parameters:
+The benchmarking system uses Mojo's built-in `benchmark` module:
 
 ```mojo
+from benchmark import Bench, BenchConfig, Bencher, BenchId, keep
 bench_config = BenchConfig(max_iters=10, min_warmuptime_secs=0.2)
 ```
 
-**Configuration explanation:**
-- **`max_iters=10`**: Runs each benchmark up to 10 times for statistical reliability
-- **`min_warmuptime_secs=0.2`**: Ensures GPU is warmed up before measurement begins
-- **Automatic calibration**: Framework automatically determines optimal iteration count
+- **`max_iters=10`**: Up to 10 iterations for statistical reliability
+- **`min_warmuptime_secs=0.2`**: GPU warmup before measurement
+- Check out the [benchmark documentation](https://docs.modular.com/mojo/stdlib/benchmark/)
 
-## Benchmarking implementation deep dive
+## Benchmarking implementation essentials
 
-### 1. **Mojo benchmark module architecture**
+### Core workflow pattern
 
-The benchmarking system relies on Mojo's built-in `benchmark` module:
-
-```mojo
-from benchmark import (
-    Bench,
-    BenchConfig,
-    Bencher,
-    BenchId,
-    keep
-)
-```
-
-**Key components:**
-- **`Bench`**: The main benchmarking orchestrator that manages multiple benchmark runs
-- **`BenchConfig`**: Specifies parameters like iteration counts and warmup time
-- **`Bencher`**: Executes individual benchmark iterations and collects timing data
-- **`BenchId`**: Provides unique names for benchmark identification and reporting
-- **`keep`**: Hints the compiler to not optimize a variable away. This is important for correct benchmarking.
-
-### 2. **Parameterized benchmark functions**
-
-Each pattern has a dedicated benchmark function using compile-time parameterization:
+Each benchmark follows a streamlined pattern:
 
 ```mojo
 @parameter
-@always_inline
-fn benchmark_elementwise_parameterized[
-    test_size: Int, tile_size: Int
-](mut b: Bencher) raises:
-    # Implementation follows...
-```
-
-**Why parameterized functions?**
-- **Compile-time specialization**: Each `test_size` and `tile_size` combination generates optimized code
-- **Zero abstraction cost**: No runtime parameter overhead
-- **Type safety**: Ensures consistent parameter usage across benchmarks
-- **Performance isolation**: Each combination is independently optimized
-
-### 3. **Workflow pattern implementation**
-
-Each benchmark follows a consistent nested function pattern:
-
-```mojo
-@parameter
-@always_inline
 fn benchmark_pattern_parameterized[test_size: Int, tile_size: Int](mut b: Bencher) raises:
     @parameter
-    @always_inline
     fn pattern_workflow(ctx: DeviceContext) raises:
-        # 1. Setup phase: Create buffers and tensors
-        alias layout = Layout.row_major(test_size)
-        out = ctx.enqueue_create_buffer[dtype](test_size).enqueue_fill(0)
-        a = ctx.enqueue_create_buffer[dtype](test_size).enqueue_fill(0)
-        b_buf = ctx.enqueue_create_buffer[dtype](test_size).enqueue_fill(0)
+        # Setup: Create buffers and initialize data
+        # Compute: Execute the algorithm being measured
+        # Prevent optimization: keep(out.unsafe_ptr())
+        # Synchronize: ctx.synchronize()
 
-        # 2. Data initialization phase
-        with a.map_to_host() as a_host, b_buf.map_to_host() as b_host:
-            for i in range(test_size):
-                a_host[i] = 2 * i
-                b_host[i] = 2 * i + 1
-
-        # 3. Tensor creation phase
-        a_tensor = LayoutTensor[mut=False, dtype, layout](a.unsafe_ptr())
-        b_tensor = LayoutTensor[mut=False, dtype, layout](b_buf.unsafe_ptr())
-        out_tensor = LayoutTensor[mut=True, dtype, layout](out.unsafe_ptr())
-
-        # 4. Actual computation being benchmarked
-        pattern_function[layout, dtype, SIMD_WIDTH, rank, test_size](
-            out_tensor, a_tensor, b_tensor, ctx
-        )
-
-        # 5. Prevent compiler optimization - Critical for accurate benchmarking!
-        keep(out.unsafe_ptr())
-
-        # 6. Synchronization to ensure completion
-        ctx.synchronize()
-
-    # 7. Benchmark execution
     bench_ctx = DeviceContext()
     b.iter_custom[pattern_workflow](bench_ctx)
 ```
 
-**Workflow phases explained:**
-
-#### **Setup phase (steps 1-3):**
-- **Buffer allocation**: `ctx.enqueue_create_buffer[dtype](test_size)` allocates GPU memory
-- **Initialization**: `enqueue_fill(0)` zeros out the memory
-- **Data preparation**: Maps to host memory for data initialization
-- **Tensor wrapping**: Creates `LayoutTensor` views for the algorithms
-
-#### **Computation phase (step 4):**
-- **Isolated execution**: Only the algorithm computation is timed
-- **Consistent parameters**: Same data layout and size across all patterns
-- **GPU targeting**: All algorithms use `target="gpu"` for fair comparison
-
-#### **Compiler optimization prevention (step 5):**
-- **`keep(out.unsafe_ptr())`**: Critical function that prevents dead code elimination
-- **Why it's needed**: Without `keep`, the compiler might optimize away the entire computation since the result isn't "used"
-- **GPU-specific concern**: GPU kernels are asynchronous, making optimization detection more complex
-- **Placement importance**: Must be after computation but before synchronization
-
-#### **Synchronization phase (step 6):**
-- **Completion guarantee**: `ctx.synchronize()` ensures GPU work completes
-- **Accurate timing**: Prevents timing of incomplete GPU operations
-
-### 4. **Custom iteration measurement**
-
-The key to accurate GPU benchmarking is the `iter_custom` approach:
-
-```mojo
-b.iter_custom[pattern_workflow](bench_ctx)
-```
-
-**Why `iter_custom`?**
-- **GPU context management**: Handles DeviceContext lifecycle properly
-- **Memory management**: Ensures proper buffer cleanup between iterations
-- **Synchronization**: Handles GPU-CPU synchronization automatically
-- **Overhead isolation**: Separates setup cost from computation cost
-
-**Comparison with standard iteration:**
-```mojo
-// Standard (problematic for GPU):
-b.iter[some_function]()  // No GPU context management
-
-// Custom (optimal for GPU):
-b.iter_custom[gpu_workflow](device_context)  // Proper GPU lifecycle
-```
-
-### 5. **Benchmark orchestration**
-
-The main benchmarking sequence follows a structured approach:
-
-```mojo
-bench_config = BenchConfig(max_iters=10, min_warmuptime_secs=0.2)
-bench = Bench(bench_config)
-
-// Register benchmarks with unique IDs
-bench.bench_function[benchmark_elementwise_parameterized[16, 4]](
-    BenchId("elementwise_16_4")
-)
-bench.bench_function[benchmark_tiled_parameterized[16, 4]](
-    BenchId("tiled_16_4")
-)
-
-// Execute and report
-print(bench)  // Automatic results table generation
-```
-
-**Orchestration benefits:**
-- **Centralized configuration**: Single config applies to all benchmarks
-- **Automatic result collection**: Framework handles timing and statistics
-- **Consistent reporting**: Uniform output format across all patterns
-- **Statistical reliability**: Multiple iterations with automatic outlier handling
-
-### 6. **Memory and synchronization considerations**
-
-#### **Critical role of `keep()` in GPU benchmarking:**
-```mojo
-keep(out.unsafe_ptr())  // Prevents dead code elimination
-```
-
-**The optimization problem:**
-Modern compilers are aggressive about eliminating "unused" computations. In our benchmarks:
-```mojo
-// Without keep(), compiler might see:
-pattern_function(out_tensor, a_tensor, b_tensor, ctx)
-// Result never read -> entire computation eliminated!
-```
-
-**Why `keep()` is essential:**
-- **Dead code elimination**: Compiler sees output buffer is never read and might skip the computation
-- **GPU complexity**: Asynchronous kernel launches make optimization detection harder
-- **Benchmark accuracy**: Without `keep`, you might be measuring nothing instead of the algorithm
-- **Strategic placement**: Must be after computation but before synchronization to be effective
-
-**What `keep()` does:**
-- **Hints to compiler**: "This memory location contains important data, don't optimize away"
-- **Zero runtime cost**: Pure compile-time hint, no performance impact
-- **Prevents false results**: Ensures actual work is measured, not optimized-away code
-
-**Real-world impact:**
-Without `keep()`, all our benchmark results might show unrealistically fast times (measuring empty kernels) or even CUDA errors from eliminated GPU operations.
-
-#### **Buffer lifecycle management:**
-```mojo
-// Each iteration creates fresh buffers
-out = ctx.enqueue_create_buffer[dtype](test_size).enqueue_fill(0)
-// Automatic cleanup when out goes out of scope
-```
-
-**Why fresh buffers per iteration?**
-- **Cache neutrality**: Prevents cache warming from affecting results
-- **Memory pressure testing**: Tests allocation overhead realistically
-- **Consistent starting state**: Each iteration starts with identical conditions
-
-#### **GPU synchronization strategy:**
-```mojo
-ctx.synchronize()  // Critical for accurate timing
-```
-
-**GPU timing challenges:**
-- **Asynchronous execution**: GPU kernels launch asynchronously
-- **Pipelined operations**: Multiple kernels may overlap
-- **Memory transfers**: Host-device transfers add complexity
-
-**How `synchronize()` solves this:**
-- **Completion guarantee**: Ensures all GPU work finishes before timing stops
-- **Accurate measurement**: Captures actual computation time, not launch time
-- **Cross-platform consistency**: Works across different GPU vendors/drivers
-
-### 7. **Parameterization strategy**
-
-The benchmark tests specific size combinations:
-
-```mojo
-// Small problem: Tests overhead characteristics
-benchmark_pattern_parameterized[16, 4]
-
-// Medium problem: Tests scaling and cache behavior
-benchmark_pattern_parameterized[128, 16]
-```
-
-**Size selection rationale:**
-- **SIZE=16, TILE=4**: Minimal GPU utilization, overhead-dominated
-- **SIZE=128, TILE=16**: Better GPU utilization, cache effects visible
-- **Power-of-2 sizes**: Aligned with GPU memory architecture
-- **Tile size relationships**: Tests different thread-to-work ratios
-
-### 8. **Result aggregation and reporting**
-
-The framework automatically generates the results table:
-
-```mojo
-print(bench)  // Triggers result compilation and display
-```
-
-**What happens during result compilation:**
-- **Statistical analysis**: Calculates mean, best, and deviation across iterations
-- **Outlier filtering**: Removes statistical outliers for more reliable results
-- **Format standardization**: Converts timing to consistent units (milliseconds)
-- **Tabular output**: Generates the formatted results table
-
-**Result interpretation framework:**
-- **Total execution time**: `met (ms)` shows cumulative time for all iterations
-- **Iteration count**: `iters` shows how many times each benchmark ran
-- **Relative comparison**: Framework enables direct pattern-to-pattern comparison
-
-This implementation demonstrates Mojo's sophisticated approach to performance measurement, combining compile-time optimization with runtime flexibility for accurate GPU benchmarking.
-
-## Test scenarios
-
-The benchmark suite tests three different scenarios to reveal performance characteristics across various problem sizes:
-
-### 1. Small problem size (SIZE=16, TILE=4)
-```mojo
-benchmark_elementwise_parameterized[16, 4]
-benchmark_tiled_parameterized[16, 4]
-benchmark_manual_vectorized_parameterized[16, 4]
-benchmark_vectorized_parameterized[16, 4]
-```
-
-**Purpose:**
-- Tests behavior with minimal GPU utilization
-- Reveals overhead costs and launch characteristics of different approaches
-- Shows which patterns work best for tiny workloads
-
-**Observed characteristics:**
-- Launch overhead dominates computation time (~3-4ms baseline)
-- Tiled/vectorize patterns show lower overhead (~3.16ms)
-- Elementwise/manual show higher overhead (~4.6ms)
-
-### 2. Medium problem size (SIZE=128, TILE=16)
-```mojo
-benchmark_elementwise_parameterized[128, 16]
-benchmark_tiled_parameterized[128, 16]
-benchmark_manual_vectorized_parameterized[128, 16]
-benchmark_vectorized_parameterized[128, 16]
-```
-
-**Purpose:**
-- Transition zone between overhead-dominated and computation-dominated
-- Tests moderate GPU utilization
-- All patterns converge to similar performance
-
-**Observed characteristics:**
-- All patterns perform similarly (~3.16ms)
-- Launch overhead still significant relative to computation
-- Pattern differences begin to emerge but remain subtle
-
-### 3. Large problem size (SIZE=1,048,576, TILE=1024)
-```mojo
-benchmark_elementwise_parameterized[1048576, 1024]
-benchmark_tiled_parameterized[1048576, 1024]
-benchmark_manual_vectorized_parameterized[1048576, 1024]
-benchmark_vectorized_parameterized[1048576, 1024]
-```
-
-**Purpose:**
-- Tests real GPU workloads with significant computation
-- Reveals true algorithmic performance differences
-- Memory bandwidth becomes the primary factor
-
-**Observed characteristics:**
-- Meaningful performance scaling (11-15ms, 3× slower than small problems)
-- Clear pattern differentiation emerges
-- Elementwise fastest (~11.3ms), manual vectorized slowest (~15.7ms)
-- Framework adapts iteration counts (70 vs 100) based on execution time
-
-## Understanding benchmark results
-
-### Interpreting the output
-
-Each benchmark result shows:
-```txt
-| name                     | met (ms)           | iters |
-| elementwise_16_4         | 3.15463684         | 100   |
-```
-
-**Metrics explained:**
-- **`name`**: The benchmark identifier (pattern_size_tile format)
-- **`met (ms)`**: Total execution time in milliseconds for all iterations
-- **`iters`**: Number of iterations performed (typically 100)
-
-**What to look for:**
-- **Lower total time**: Better overall performance for the workload
-- **Consistent timing**: Similar execution times indicate stable performance
-- **Relative comparison**: Compare times between patterns for the same problem size
-
-### Performance analysis framework
-
-When analyzing results, consider these factors:
-
-#### 1. **Thread utilization efficiency**
-```
-Small problem (SIZE=16):
-Elementwise: 16 ÷ 4 = 4 threads
-Tiled:       16 ÷ 4 = 4 threads
-Manual:      16 ÷ (4×4) = 1 thread
-Vectorize:   16 ÷ 4 = 4 threads
-
-Medium problem (SIZE=128):
-Elementwise: 128 ÷ 4 = 32 threads
-Tiled:       128 ÷ 16 = 8 threads
-Manual:      128 ÷ (16×4) = 2 threads
-Vectorize:   128 ÷ 16 = 8 threads
-
-Large problem (SIZE=1,048,576):
-Elementwise: 1,048,576 ÷ 4 = 262,144 threads
-Tiled:       1,048,576 ÷ 1024 = 1,024 threads
-Manual:      1,048,576 ÷ (1024×4) = 256 threads
-Vectorize:   1,048,576 ÷ 1024 = 1,024 threads
-```
-
-**Real-world observations:**
-- **Small problems**: Thread count differences don't matter, overhead dominates
-- **Medium problems**: Still overhead-dominated, patterns converge
-- **Large problems**: Thread utilization becomes meaningful, clear performance differentiation
-
-#### 2. **Memory access pattern impact**
-```
-Elementwise: Distributed access across entire array
-Tiled:       Localized access within small blocks
-Manual:      Large sequential chunks
-Vectorize:   Automatic optimization within tiles
-```
-
-**Performance indicators:**
-- **Cache hit rates**: Tiled patterns should show better cache behavior
-- **Memory bandwidth**: Sequential patterns should achieve higher bandwidth
-- **Latency hiding**: More threads should hide memory access latency better
-
-#### 3. **SIMD utilization analysis**
-All patterns achieve the same total SIMD operations, but with different organization:
-
-**For SIZE=16 (SIMD_WIDTH=4):**
-```
-Total SIMD ops = 16 ÷ 4 = 4 SIMD operations
-
-Distribution:
-- Elementwise: 4 threads × 1 SIMD op each
-- Tiled:       4 threads × 1 SIMD op each
-- Manual:      1 thread × 4 SIMD ops
-- Vectorize:   4 threads × 1 SIMD op each (automatic)
-```
-
-**For SIZE=128 (SIMD_WIDTH=4):**
-```
-Total SIMD ops = 128 ÷ 4 = 32 SIMD operations
-
-Distribution:
-- Elementwise: 32 threads × 1 SIMD op each
-- Tiled:       8 threads × 4 SIMD ops each
-- Manual:      2 threads × 16 SIMD ops each
-- Vectorize:   8 threads × 4 SIMD ops each (automatic)
-```
-
-**For SIZE=1,048,576 (SIMD_WIDTH=4):**
-```
-Total SIMD ops = 1,048,576 ÷ 4 = 262,144 SIMD operations
-
-Distribution:
-- Elementwise: 262,144 threads × 1 SIMD op each
-- Tiled:       1,024 threads × 256 SIMD ops each
-- Manual:      256 threads × 1,024 SIMD ops each
-- Vectorize:   1,024 threads × 256 SIMD ops each (automatic)
-```
-
-**Performance correlation:**
-At large scale, the pattern with the highest thread count (elementwise) performs best, suggesting that GPU parallelization outweighs complex memory access optimizations for simple memory-bound operations.
-
-## Practical performance insights
-
-### Observed performance patterns
-
-Based on the empirical benchmark results, here's what we actually observe:
-
-#### **Small problems (SIZE=16)**
-- **Tiled/Vectorize**: Fastest (~3.16ms) due to lower launch overhead
-- **Elementwise/Manual**: Slower (~4.6ms) due to higher launch overhead
-- **Launch overhead dominates**: Computation time is negligible compared to GPU kernel launch costs
-
-#### **Medium problems (SIZE=128)**
-- **All patterns converge**: Performance differences nearly disappear (~3.16ms)
-- **Transitional behavior**: Still overhead-dominated but patterns begin to differentiate
-- **Framework optimization**: Iteration counts automatically adjust (80-100 iterations)
-
-#### **Large problems (SIZE=1,048,576) - Where real differences emerge**
-- **Elementwise wins**: 11.34ms - High parallelism excels for memory-bound operations
-- **Tiled second**: 12.04ms - Good balance of parallelism and locality
-- **Vectorize third**: 13.38ms - Automatic optimization overhead becomes visible
-- **Manual vectorized slowest**: 15.75ms - Complex indexing hurts simple operations
-
-**Key insight:** For simple memory-bound operations like vector addition, **maximum parallelism (elementwise) outperforms complex memory optimizations** at scale.
-
-### Hardware-specific considerations
-
-Your results will vary based on:
-
-#### **GPU architecture factors:**
-- **SIMD width**: Affects optimal vectorization strategy
-- **Cache size**: Influences optimal tile size
-- **Core count**: Determines benefit of higher thread counts
-- **Memory bandwidth**: Sets theoretical performance ceiling
-
-#### **System factors:**
-- **Memory hierarchy**: L1/L2 cache sizes affect tiling benefits
-- **Thermal throttling**: May affect sustained performance
-- **Concurrent workloads**: Other GPU usage impacts results
-
-## Advanced benchmarking techniques
-
-### Custom benchmark scenarios
-
-You can modify the benchmark parameters to test different scenarios:
-
-```mojo
-// Test different problem sizes
-benchmark_elementwise_parameterized[1024, 32]  // Large problem
-benchmark_elementwise_parameterized[64, 8]     // Small problem
-
-// Test different tile sizes
-benchmark_tiled_parameterized[256, 8]   // Small tiles
-benchmark_tiled_parameterized[256, 64]  // Large tiles
-```
-
-### Performance profiling integration
-
-For deeper analysis, combine benchmarking with:
-- **GPU profilers**: NVIDIA Nsight, AMD ROCProfiler
-- **Memory bandwidth tools**: Check actual vs theoretical bandwidth
-- **Cache analysis**: Measure hit rates and access patterns
-
-💡 **Note**: Advanced GPU profiling techniques and tools will be covered in detail in later parts of this book series.
+**Key phases:**
+1. **Setup**: Buffer allocation and data initialization
+2. **Computation**: The actual algorithm being benchmarked
+3. **Prevent optimization**: Critical for accurate measurement
+4. **Synchronization**: Ensure GPU work completes
+
+> **Critical: The `keep()` function**
+> `keep(out.unsafe_ptr())` prevents the compiler from optimizing away your computation as "unused code." Without this, you might measure nothing instead of your algorithm! This is essential for accurate GPU benchmarking because kernels are launched asynchronously.
+
+### Why custom iteration works for GPU
+
+Standard benchmarking assumes CPU-style synchronous execution. GPU kernels launch asynchronously, so we need:
+
+- **GPU context management**: Proper DeviceContext lifecycle
+- **Memory management**: Buffer cleanup between iterations
+- **Synchronization handling**: Accurate timing of async operations
+- **Overhead isolation**: Separate setup cost from computation cost
+
+## Test scenarios and thread analysis
+
+The benchmark suite tests three scenarios to reveal performance characteristics:
+
+### Thread utilization summary
+
+| Problem Size | Pattern | Threads | SIMD ops/thread | Total SIMD ops |
+|-------------|---------|---------|-----------------|----------------|
+| **SIZE=16** | Elementwise | 4 | 1 | 4 |
+|             | Tiled | 4 | 1 | 4 |
+|             | Manual | 1 | 4 | 4 |
+|             | Vectorize | 4 | 1 | 4 |
+| **SIZE=128** | Elementwise | 32 | 1 | 32 |
+|              | Tiled | 8 | 4 | 32 |
+|              | Manual | 2 | 16 | 32 |
+|              | Vectorize | 8 | 4 | 32 |
+| **SIZE=1M** | Elementwise | 262,144 | 1 | 262,144 |
+|             | Tiled | 1,024 | 256 | 262,144 |
+|             | Manual | 256 | 1,024 | 262,144 |
+|             | Vectorize | 1,024 | 256 | 262,144 |
+
+### Performance characteristics by problem size
+
+**Small problems (SIZE=16):**
+- Launch overhead dominates (~3-4ms baseline)
+- Thread count differences don't matter
+- Tiled/vectorize show lower overhead
+
+**Medium problems (SIZE=128):**
+- Still overhead-dominated (~3.16ms for all)
+- Performance differences nearly disappear
+- Transitional behavior between overhead and computation
+
+**Large problems (SIZE=1M):**
+- Real algorithmic differences emerge
+- Memory bandwidth becomes primary factor
+- Clear performance ranking appears
+
+## What the data shows
+
+Based on empirical benchmark results across different hardware:
+
+### Performance rankings (large problems)
+
+| Rank | Pattern | Typical time | Key insight |
+|------|---------|-------------|-------------|
+| 🥇 | **Elementwise** | ~11.3ms | Max parallelism wins for memory-bound ops |
+| 🥈 | **Tiled** | ~12.0ms | Good balance of parallelism + locality |
+| 🥉 | **Mojo vectorize** | ~13.4ms | Automatic optimization has overhead |
+| 4th | **Manual vectorized** | ~15.7ms | Complex indexing hurts simple operations |
+
+### Key performance insights
+
+> **For simple memory-bound operations:** Maximum parallelism (elementwise) outperforms complex memory optimizations at scale.
+
+**Why elementwise wins:**
+- **262,144 threads** provide excellent latency hiding
+- **Simple memory patterns** achieve good coalescing
+- **Minimal overhead** per thread
+- **Scales naturally** with GPU core count
+
+**Why manual vectorization struggles:**
+- **Only 256 threads** limit parallelism
+- **Complex indexing** adds computational overhead
+- **Cache pressure** from large chunks per thread
+- **Diminishing returns** for simple arithmetic
+
+**Framework intelligence:**
+- Automatic iteration count adjustment (70-100 iterations)
+- Statistical reliability across different execution times
+- Handles thermal throttling and system variation
 
 ## Interpreting your results
 
-### Performance ranking methodology
+### Reading the output table
 
-When comparing results:
+```txt
+| name                     | met (ms)           | iters |
+| elementwise_1M_1024      | 11.338706742857143 | 70    |
+```
 
-1. **Normalize by problem size**: Calculate throughput (elements/second)
-2. **Consider consistency**: Prefer patterns with low deviation
-3. **Account for complexity**: Factor in development and maintenance costs
-4. **Test scaling**: Verify performance across different problem sizes
+- **`met (ms)`**: Total execution time for all iterations
+- **`iters`**: Number of iterations performed
+- **Compare within problem size**: Same-size comparisons are most meaningful
 
 ### Making optimization decisions
 
-Use benchmark results to:
+**Choose patterns based on empirical evidence:**
 
-#### **Choose optimal patterns based on empirical results:**
-- **For simple memory-bound operations**: Elementwise pattern consistently wins at scale
-- **For small/startup workloads**: Tiled or vectorize patterns have lower launch overhead
-- **For development productivity**: Mojo vectorize provides good performance with automatic optimization
-- **Avoid manual vectorization**: For simple operations, the complexity doesn't pay off
+**For production workloads:**
+- **Large datasets (>100K elements)**: Elementwise typically optimal
+- **Small/startup datasets (<1K elements)**: Tiled or vectorize for lower overhead
+- **Development speed priority**: Mojo vectorize for automatic optimization
+- **Avoid manual vectorization**: Complexity rarely pays off for simple operations
 
-#### **Problem size considerations:**
-- **Tiny problems (< 1K elements)**: Launch overhead dominates, choose patterns with lower overhead
-- **Medium problems (1K-100K)**: Performance differences are minimal, choose for maintainability
-- **Large problems (> 100K elements)**: Real algorithmic differences emerge, elementwise typically wins
+**Performance optimization workflow:**
+1. **Profile first**: Measure before optimizing
+2. **Test at scale**: Small problems mislead about real performance
+3. **Consider total cost**: Include development and maintenance effort
+4. **Validate improvements**: Confirm with benchmarks on target hardware
 
-#### **Performance insights from real data:**
-- **Parallelism beats optimization**: For memory-bound workloads, more threads > complex memory patterns
-- **Launch overhead is significant**: Small problems don't reveal true algorithmic performance
-- **Framework intelligence**: Mojo's benchmark framework adapts iteration counts automatically (70-100)
-- **Memory bandwidth ceiling**: All patterns hit similar performance walls at large scales
+## Advanced benchmarking techniques
+
+### Custom test scenarios
+
+Modify parameters to test different conditions:
+
+```mojo
+# Different problem sizes
+benchmark_elementwise_parameterized[1024, 32]  # Large problem
+benchmark_elementwise_parameterized[64, 8]     # Small problem
+
+# Different tile sizes
+benchmark_tiled_parameterized[256, 8]   # Small tiles
+benchmark_tiled_parameterized[256, 64]  # Large tiles
+```
+
+### Hardware considerations
+
+Your results will vary based on:
+
+- **GPU architecture**: SIMD width, core count, memory bandwidth
+- **System configuration**: PCIe bandwidth, CPU performance
+- **Thermal state**: GPU boost clocks vs sustained performance
+- **Concurrent workloads**: Other processes affecting GPU utilization
+
+## Best practices summary
+
+**Benchmarking workflow:**
+1. **Warm up GPU** before critical measurements
+2. **Run multiple iterations** for statistical significance
+3. **Test multiple problem sizes** to understand scaling
+4. **Use `keep()` consistently** to prevent optimization artifacts
+5. **Compare like with like** (same problem size, same hardware)
+
+**Performance decision framework:**
+- **Start simple**: Begin with elementwise for memory-bound operations
+- **Measure don't guess**: Theoretical analysis guides, empirical data decides
+- **Scale matters**: Small problem performance doesn't predict large problem behavior
+- **Total cost optimization**: Balance development time vs runtime performance
 
 ## Next steps
 
@@ -611,18 +280,20 @@ With benchmarking mastery:
 
 💡 **Key takeaway**: Benchmarking transforms theoretical understanding into practical performance optimization. Use empirical data to make informed decisions about which patterns work best for your specific hardware and workload characteristics.
 
-## Best practices summary
+## Looking Ahead: When you need more control
 
-**Benchmarking best practices:**
-- Always warm up GPU before measuring
-- Run multiple iterations for statistical significance
-- Test across different problem sizes
-- Consider both peak and average performance
-- Account for real-world usage patterns
+The functional patterns in Part V provide excellent performance for most workloads, but some algorithms require **direct thread communication**:
 
-**Performance optimization workflow:**
-1. **Profile first**: Measure before optimizing
-2. **Identify bottlenecks**: Memory vs compute bound analysis
-3. **Choose patterns**: Based on workload characteristics
-4. **Tune parameters**: Optimize tile sizes and thread counts
-5. **Validate**: Confirm improvements with benchmarks
+### **Algorithms that benefit from warp programming:**
+- **Reductions**: Sum, max, min operations across thread groups
+- **Prefix operations**: Cumulative sums, running maximums
+- **Data shuffling**: Reorganizing data between threads
+- **Cooperative algorithms**: Where threads must coordinate closely
+
+### **Performance preview:**
+In Part VI, we'll revisit several algorithms from Part II and show how warp operations can:
+- **Simplify code**: Replace complex shared memory patterns with single function calls
+- **Improve performance**: Eliminate barriers and reduce memory traffic
+- **Enable new algorithms**: Unlock patterns impossible with pure functional approaches
+
+**Coming up next**: [Part VI: Warp-Level Programming](../puzzle_21/puzzle_21.md) - starting with a dramatic reimplementation of Puzzle 12's prefix sum.

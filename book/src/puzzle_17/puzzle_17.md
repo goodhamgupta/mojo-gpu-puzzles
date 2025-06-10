@@ -294,7 +294,7 @@ The transpose kernel uses **shared memory tiling** to achieve coalesced memory a
 shared_tile[local_row, local_col] = inp[global_row, global_col]
 barrier()
 # Store with swapped indexing for transpose
-out[out_row, out_col] = shared_tile[local_col, local_row]
+output[out_row, out_col] = shared_tile[local_col, local_row]
 ```
 
 The transpose happens through **swapped indexing** in shared memory access (`[local_col, local_row]` instead of `[local_row, local_col]`) and **swapped block coordinates** for output positioning. This ensures both reads and writes remain coalesced while achieving the transpose operation.

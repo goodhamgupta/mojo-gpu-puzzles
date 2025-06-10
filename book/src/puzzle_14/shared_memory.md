@@ -2,7 +2,7 @@
 
 ## Overview
 
-Implement a kernel that multiplies square matrices \\(A\\) and \\(B\\) and stores the result in \\(\text{out}\\), using shared memory to improve memory access efficiency. This version loads matrix blocks into shared memory before computation.
+Implement a kernel that multiplies square matrices \\(A\\) and \\(B\\) and stores the result in \\(\text{output}\\), using shared memory to improve memory access efficiency. This version loads matrix blocks into shared memory before computation.
 
 ## Key concepts
 
@@ -145,7 +145,7 @@ Matrix B:                           b_shared: (similar layout)
    # Guard ensures we only compute for valid matrix elements
    if row < size and col < size:
        # Initialize accumulator with output tensor's type
-       var acc: out.element_type = 0
+       var acc: output.element_type = 0
 
        # Compile-time unrolled loop for matrix multiplication
        @parameter
@@ -153,7 +153,7 @@ Matrix B:                           b_shared: (similar layout)
            acc += a_shared[local_row, k] * b_shared[k, local_col]
 
        # Write result only for threads within matrix bounds
-       out[row, col] = acc
+       output[row, col] = acc
    ```
 
    Key aspects:
@@ -162,7 +162,7 @@ Matrix B:                           b_shared: (similar layout)
      * Only valid threads perform work
      * Essential because TPB (3×3) > SIZE (2×2)
 
-   - **Accumulator Type**: `var acc: out.element_type`
+   - **Accumulator Type**: `var acc: output.element_type`
      * Uses output tensor's element type for type safety
      * Ensures consistent numeric precision
      * Initialized to zero before accumulation
@@ -172,7 +172,7 @@ Matrix B:                           b_shared: (similar layout)
      * Enables better instruction scheduling
      * Efficient for small, known matrix sizes
 
-   - **Result Writing**: `out[row, col] = acc`
+   - **Result Writing**: `output[row, col] = acc`
      * Protected by the same guard condition
      * Only valid threads write results
      * Maintains matrix bounds safety

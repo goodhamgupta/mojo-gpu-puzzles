@@ -229,7 +229,7 @@ Key performance features:
 2. **Boundary handling**:
    ```mojo
    if row < size and col < size:
-       out[row, col] = acc
+       output[row, col] = acc
    ```
    - Prevents out-of-bounds access
    - Handles matrix edges
@@ -246,7 +246,7 @@ Key performance features:
    - Efficient shared memory usage
 
 3. **Computation**:
-   - Register-based accumulation i.e. `var acc: out.element_type = 0`
+   - Register-based accumulation i.e. `var acc: output.element_type = 0`
    - Compile-time loop unrolling via `@parameter`
 
 This implementation achieves high performance through:
@@ -272,7 +272,7 @@ The idiomatic tiled matrix multiplication leverages Mojo's LayoutTensor API and 
 
 1. **LayoutTensor tile API**
    ```mojo
-   out_tile = out.tile[TPB, TPB](block_idx.y, block_idx.x)
+   out_tile = output.tile[TPB, TPB](block_idx.y, block_idx.x)
    a_tile = a.tile[TPB, TPB](block_idx.y, idx)
    b_tile = b.tile[TPB, TPB](idx, block_idx.x)
    ```

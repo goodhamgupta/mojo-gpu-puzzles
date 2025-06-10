@@ -225,7 +225,7 @@ fn softmax_gpu_kernel[
     input_size: Int,
     dtype: DType = DType.float32,
 ](
-    out: LayoutTensor[mut=True, dtype, layout],
+    output: LayoutTensor[mut=True, dtype, layout],
     input: LayoutTensor[mut=False, dtype, layout],
 )
 ```
@@ -298,7 +298,7 @@ block_max = shared_max[0]
 var exp_val: Scalar[dtype] = 0.0
 if global_i < input_size:
     exp_val = rebind[Scalar[dtype]](exp(input[global_i] - block_max))
-    out[global_i] = exp_val
+    output[global_i] = exp_val
 ```
 Each thread:
 1. Reads the global maximum from shared memory
@@ -330,7 +330,7 @@ The second reduction phase:
 block_sum = shared_sum[0]
 
 if global_i < input_size:
-    out[global_i] = out[global_i] / block_sum
+    output[global_i] = output[global_i] / block_sum
 ```
 Each thread:
 1. Reads the total sum from shared memory
@@ -373,7 +373,7 @@ Our CPU implementation provides a sequential fallback that follows the same math
    var sum_exp: Scalar[dtype] = 0.0
    for i in range(input_size):
        var exp_val = rebind[Scalar[dtype]](exp(input[i] - max_val))
-       out[i] = exp_val
+       output[i] = exp_val
        sum_exp += exp_val
    ```
    We compute \\(e^{x_i - max}\\) for each element, store the result in the output buffer, and accumulate the sum \\(\sum_{j=1}^{n} e^{x_j - max}\\) in a single pass. This approach minimizes memory operations compared to using separate loops.
@@ -381,7 +381,7 @@ Our CPU implementation provides a sequential fallback that follows the same math
 3. **Normalization**:
    ```mojo
    for i in range(input_size):
-       out[i] = out[i] / sum_exp
+       output[i] = output[i] / sum_exp
    ```
    Finally, we normalize each element by dividing by the sum, producing a proper probability distribution according to the softmax formula:
 

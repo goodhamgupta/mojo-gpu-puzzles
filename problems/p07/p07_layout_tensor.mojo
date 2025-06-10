@@ -16,7 +16,7 @@ fn add_10_blocks_2d[
     out_layout: Layout,
     a_layout: Layout,
 ](
-    out: LayoutTensor[mut=True, dtype, out_layout],
+    output: LayoutTensor[mut=True, dtype, out_layout],
     a: LayoutTensor[mut=False, dtype, a_layout],
     size: Int,
 ):

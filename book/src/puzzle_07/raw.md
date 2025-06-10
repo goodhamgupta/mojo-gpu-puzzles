@@ -1,6 +1,6 @@
 ## Overview
 
-Implement a kernel that adds 10 to each position of matrix `a` and stores it in `out`.
+Implement a kernel that adds 10 to each position of matrix `a` and stores it in `output`.
 
 **Note:** _You have fewer threads per block than the size of `a` in both directions._
 

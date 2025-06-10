@@ -2,7 +2,7 @@
 
 ## Overview
 
-Implement a kernel that multiplies square matrices \\(A\\) and \\(B\\) and stores the result in \\(\text{out}\\).
+Implement a kernel that multiplies square matrices \\(A\\) and \\(B\\) and stores the result in \\(\text{output}\\).
 This is the most straightforward implementation where each thread computes one element of the output matrix.
 
 ## Key concepts
@@ -107,12 +107,12 @@ Matrix A:          Matrix B:                   Output C:
 2. **Memory access pattern**:
    - Direct 2D indexing: `a[row, k]`
    - Transposed access: `b[k, col]`
-   - Output writing: `out[row, col]`
+   - Output writing: `output[row, col]`
 
 3. **Computation flow**:
    ```mojo
    # Use var for mutable accumulator with tensor's element type
-   var acc: out.element_type = 0
+   var acc: output.element_type = 0
 
    # @parameter for compile-time loop unrolling
    @parameter
@@ -123,7 +123,7 @@ Matrix A:          Matrix B:                   Output C:
 ### Key language features:
 
 1. **Variable declaration**:
-   - The use of `var` in `var acc: out.element_type = 0` allows for type inference with `out.element_type` ensures type compatibility with the output tensor
+   - The use of `var` in `var acc: output.element_type = 0` allows for type inference with `output.element_type` ensures type compatibility with the output tensor
    - Initialized to zero before accumulation
 
 2. **Loop pptimization**:

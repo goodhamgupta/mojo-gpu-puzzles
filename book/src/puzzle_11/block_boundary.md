@@ -1,6 +1,6 @@
 # Block Boundary Version
 
-Implement a kernel that computes a 1D convolution between 1D LayoutTensor `a` and 1D LayoutTensor `b` and stores it in 1D LayoutTensor `out`.
+Implement a kernel that computes a 1D convolution between 1D LayoutTensor `a` and 1D LayoutTensor `b` and stores it in 1D LayoutTensor `output`.
 
 **Note:** _You need to handle the general case. You only need 2 global reads and 1 global write per thread._
 
@@ -140,14 +140,14 @@ Size calculation:
 4. **Convolution Computation**:
    ```mojo
    if global_i < a_size:
-       var local_sum: out.element_type = 0
+       var local_sum: output.element_type = 0
        @parameter
        for j in range(CONV_2):
            if local_i + j < TPB + CONV_2 - 1:
                local_sum += shared_a[local_i + j] * shared_b[j]
    ```
    - Uses `@parameter` for compile-time loop unrolling
-   - Proper type inference with `out.element_type`
+   - Proper type inference with `output.element_type`
    - Extended bounds check for overlap region
 
 ### Memory access pattern analysis

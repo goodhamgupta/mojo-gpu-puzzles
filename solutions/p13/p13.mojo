@@ -19,7 +19,7 @@ alias out_layout = Layout.row_major(BATCH, 1)
 fn axis_sum[
     in_layout: Layout, out_layout: Layout
 ](
-    out: LayoutTensor[mut=False, dtype, out_layout],
+    output: LayoutTensor[mut=False, dtype, out_layout],
     a: LayoutTensor[mut=False, dtype, in_layout],
     size: Int,
 ):
@@ -55,7 +55,7 @@ fn axis_sum[
 
     # writing with local thread = 0 that has the sum for each batch
     if local_i == 0:
-        out[batch, 0] = cache[0]
+        output[batch, 0] = cache[0]
 
 
 # ANCHOR_END: axis_sum_solution

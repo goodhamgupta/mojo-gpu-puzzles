@@ -1,6 +1,6 @@
 # Simple Version
 
-Implement a kernel that computes a prefix-sum over 1D LayoutTensor `a` and stores it in 1D LayoutTensor `out`.
+Implement a kernel that computes a prefix-sum over 1D LayoutTensor `a` and stores it in 1D LayoutTensor `output`.
 
 **Note:** _If the size of `a` is greater than the block size, only store the sum of each block._
 
@@ -135,7 +135,7 @@ Result:      [0    1    3    6    10   15   21   28]
 ```txt
 Threads:      T₀   T₁   T₂   T₃   T₄   T₅   T₆   T₇
 global_i:     0    1    2    3    4    5    6    7
-out[]:       [0    1    3    6    10   15   21   28]
+output:       [0    1    3    6    10   15   21   28]
               ↑    ↑    ↑    ↑    ↑    ↑    ↑    ↑
               T₀   T₁   T₂   T₃   T₄   T₅   T₆   T₇
 ```
@@ -145,55 +145,55 @@ out[]:       [0    1    3    6    10   15   21   28]
 **\\(T_0\\) (`local_i=0`):**
 - Loads `shared[0] = 0`
 - Never adds (`local_i < offset` always)
-- Writes `out[0] = 0`
+- Writes `output[0] = 0`
 
 **\\(T_1\\) (`local_i=1`):**
 - Loads `shared[1] = 1`
 - `offset=1`: adds `shared[0]` → 1
 - `offset=2,4`: no action (`local_i < offset`)
-- Writes `out[1] = 1`
+- Writes `output[1] = 1`
 
 **\\(T_2\\) (`local_i=2`):**
 - Loads `shared[2] = 2`
 - `offset=1`: adds `shared[1]` → 3
 - `offset=2`: adds `shared[0]` → 3
 - `offset=4`: no action
-- Writes `out[2] = 3`
+- Writes `output[2] = 3`
 
 **\\(T_3\\) (`local_i=3`):**
 - Loads `shared[3] = 3`
 - `offset=1`: adds `shared[2]` → 5
 - `offset=2`: adds `shared[1]` → 6
 - `offset=4`: no action
-- Writes `out[3] = 7`
+- Writes `output[3] = 7`
 
 **\\(T_4\\) (`local_i=4`):**
 - Loads `shared[4] = 4`
 - `offset=1`: adds `shared[3]` → 7
 - `offset=2`: adds `shared[2]` → 10
 - `offset=4`: adds `shared[0]` → 10
-- Writes `out[4] = 10`
+- Writes `output[4] = 10`
 
 **\\(T_5\\) (`local_i=5`):**
 - Loads `shared[5] = 5`
 - `offset=1`: adds `shared[4]` → 9
 - `offset=2`: adds `shared[3]` → 14
 - `offset=4`: adds `shared[1]` → 15
-- Writes `out[5] = 16`
+- Writes `output[5] = 16`
 
 **\\(T_6\\) (`local_i=6`):**
 - Loads `shared[6] = 6`
 - `offset=1`: adds `shared[5]` → 11
 - `offset=2`: adds `shared[4]` → 18
 - `offset=4`: adds `shared[2]` → 21
-- Writes `out[6] = 21`
+- Writes `output[6] = 21`
 
 **\\(T_7\\) (`local_i=7`):**
 - Loads `shared[7] = 7`
 - `offset=1`: adds `shared[6]` → 13
 - `offset=2`: adds `shared[5]` → 22
 - `offset=4`: adds `shared[3]` → 28
-- Writes `out[7] = 28`
+- Writes `output[7] = 28`
 
 The solution ensures correct synchronization between phases using `barrier()` and handles array bounds checking with `if global_i < size`. The final result produces the inclusive prefix sum where each element \\(i\\) contains \\(\sum_{j=0}^{i} a[j]\\).
 </div>

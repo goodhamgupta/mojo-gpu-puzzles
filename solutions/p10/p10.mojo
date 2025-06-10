@@ -14,7 +14,7 @@ alias dtype = DType.float32
 
 # ANCHOR: dot_product_solution
 fn dot_product(
-    out: UnsafePointer[Scalar[dtype]],
+    output: UnsafePointer[Scalar[dtype]],
     a: UnsafePointer[Scalar[dtype]],
     b: UnsafePointer[Scalar[dtype]],
     size: Int,
@@ -51,7 +51,7 @@ fn dot_product(
 
     # only thread 0 writes the final result
     if local_i == 0:
-        out[0] = shared[0]
+        output[0] = shared[0]
 
 
 # ANCHOR_END: dot_product_solution

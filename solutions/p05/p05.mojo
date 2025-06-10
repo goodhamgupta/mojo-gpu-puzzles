@@ -11,7 +11,7 @@ alias dtype = DType.float32
 
 # ANCHOR: broadcast_add_solution
 fn broadcast_add(
-    out: UnsafePointer[Scalar[dtype]],
+    output: UnsafePointer[Scalar[dtype]],
     a: UnsafePointer[Scalar[dtype]],
     b: UnsafePointer[Scalar[dtype]],
     size: Int,
@@ -19,7 +19,7 @@ fn broadcast_add(
     row = thread_idx.y
     col = thread_idx.x
     if row < size and col < size:
-        out[row * size + col] = a[col] + b[row]
+        output[row * size + col] = a[col] + b[row]
 
 
 # ANCHOR_END: broadcast_add_solution

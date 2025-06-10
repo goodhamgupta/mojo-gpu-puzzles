@@ -1,6 +1,6 @@
 # Complete Version
 
-Implement a kernel that computes a prefix-sum over 1D LayoutTensor `a` and stores it in 1D LayoutTensor `out`.
+Implement a kernel that computes a prefix-sum over 1D LayoutTensor `a` and stores it in 1D LayoutTensor `output`.
 
 **Note:** _If the size of `a` is greater than the block size, we need to synchronize across multiple blocks to get the correct result._
 
@@ -213,12 +213,12 @@ The size of this extended buffer is: `EXTENDED_SIZE = SIZE_2 + num_blocks = 15 +
 
 3. **Write local results back to global memory**:
    ```
-   out[0...7] = [0, 1, 3, 6, 10, 15, 21, 28]
+   output[0...7] = [0, 1, 3, 6, 10, 15, 21, 28]
    ```
 
 4. **Store block sum in auxiliary space** (only last thread):
    ```
-   out[15] = 28  // at position size + block_idx.x = 15 + 0
+   output[15] = 28  // at position size + block_idx.x = 15 + 0
    ```
 
 ### Step-by-step execution for Block 1
@@ -237,12 +237,12 @@ The size of this extended buffer is: `EXTENDED_SIZE = SIZE_2 + num_blocks = 15 +
 
 3. **Write local results back to global memory**:
    ```
-   out[8...14] = [8, 17, 27, 38, 50, 63, 77]
+   output[8...14] = [8, 17, 27, 38, 50, 63, 77]
    ```
 
 4. **Store block sum in auxiliary space** (only last thread):
    ```
-   out[16] = 77  // at position size + block_idx.x = 15 + 1
+   output[16] = 77  // at position size + block_idx.x = 15 + 1
    ```
 
 After Phase 1, the output buffer contains:
@@ -267,8 +267,8 @@ This is the most crucial part of the algorithm! Without this synchronization, th
 
 2. **Block 1**: Each thread adds Block 0's sum to its element:
    ```
-   prev_block_sum = out[size + block_idx.x - 1] = out[15] = 28
-   out[global_i] += prev_block_sum
+   prev_block_sum = output[size + block_idx.x - 1] = output[15] = 28
+   output[global_i] += prev_block_sum
    ```
 
    Block 1 values are transformed:

@@ -14,7 +14,7 @@ alias dtype = DType.float32
 
 # ANCHOR: add_10_shared_solution
 fn add_10_shared(
-    out: UnsafePointer[Scalar[dtype]],
+    output: UnsafePointer[Scalar[dtype]],
     a: UnsafePointer[Scalar[dtype]],
     size: Int,
 ):
@@ -35,7 +35,7 @@ fn add_10_shared(
 
     # process using shared memory
     if global_i < size:
-        out[global_i] = shared[local_i] + 10
+        output[global_i] = shared[local_i] + 10
 
 
 # ANCHOR_END: add_10_shared_solution
