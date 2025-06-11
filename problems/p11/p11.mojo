@@ -31,10 +31,14 @@ fn conv_1d_simple[
     #             ret[i] += a_host[i + j] * b_host[j]
     global_i = block_dim.x * block_idx.x + thread_idx.x
     local_i = thread_idx.x
-    shared = tb[dtype]().row_major[TPB]().shared().alloc()
+    shared_a = tb[dtype]().row_major[TPB]().shared().alloc()
+    shared_b = tb[dtype]().row_major[TPB]().shared().alloc()
 
     if global_i < SIZE:
-        shared[local_i] = a[global_i]
+        shared_a[local_i] = a[global_i]
+    
+    if global_i < CONV:
+        shared_b[local_i] = b[global_i]
 
     barrier()
 
@@ -45,13 +49,10 @@ fn conv_1d_simple[
         @parameter
         for j in range(CONV):
             if local_i + j < SIZE:
-                local_sum += shared[local_i + j] * b[j]
+                local_sum += shared_a[local_i + j] * shared_b[j]
             barrier()
         
         output[global_i] = local_sum
-    
-    # if local_i < SIZE:
-    #     output[global_i] = shared[local_i]
 
     # FILL ME IN (roughly 14 lines)
 
