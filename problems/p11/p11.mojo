@@ -20,12 +20,35 @@ alias conv_layout = Layout.row_major(CONV)
 fn conv_1d_simple[
     in_layout: Layout, out_layout: Layout, conv_layout: Layout
 ](
-    out: LayoutTensor[mut=False, dtype, out_layout],
+    output: LayoutTensor[mut=False, dtype, out_layout],
     a: LayoutTensor[mut=False, dtype, in_layout],
     b: LayoutTensor[mut=False, dtype, conv_layout],
 ):
+    # Psuedocode convolution
+    # for i in range(SIZE):
+    #     for j in range(CONV):
+    #         if i + j < SIZE:
+    #             ret[i] += a_host[i + j] * b_host[j]
     global_i = block_dim.x * block_idx.x + thread_idx.x
     local_i = thread_idx.x
+    shared = tb[dtype]().row_major[TPB]().shared().alloc()
+
+    if global_i < SIZE:
+        shared[local_i] = a[global_i]
+
+    barrier()
+
+    if global_i < SIZE:
+
+        @parameter
+        for j in range(CONV):
+            if local_i + j < SIZE:
+                output[global_i] += shared[local_i + j] * b[j]
+            barrier()
+    
+    # if local_i < SIZE:
+    #     output[global_i] = shared[local_i]
+
     # FILL ME IN (roughly 14 lines)
 
 
@@ -44,7 +67,7 @@ alias conv_2_layout = Layout.row_major(CONV_2)
 fn conv_1d_block_boundary[
     in_layout: Layout, out_layout: Layout, conv_layout: Layout, dtype: DType
 ](
-    out: LayoutTensor[mut=False, dtype, out_layout],
+    output: LayoutTensor[mut=False, dtype, out_layout],
     a: LayoutTensor[mut=False, dtype, in_layout],
     b: LayoutTensor[mut=False, dtype, conv_layout],
 ):
