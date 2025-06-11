@@ -40,11 +40,15 @@ fn conv_1d_simple[
 
     if global_i < SIZE:
 
+        var local_sum: output.element_type = 0
+
         @parameter
         for j in range(CONV):
             if local_i + j < SIZE:
-                output[global_i] += shared[local_i + j] * b[j]
+                local_sum += shared[local_i + j] * b[j]
             barrier()
+        
+        output[global_i] = local_sum
     
     # if local_i < SIZE:
     #     output[global_i] = shared[local_i]
