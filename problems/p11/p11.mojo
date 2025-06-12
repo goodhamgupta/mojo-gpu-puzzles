@@ -78,27 +78,27 @@ fn conv_1d_block_boundary[
     global_i = block_dim.x * block_idx.x + thread_idx.x
     local_i  = thread_idx.x
 
-    shared_a = tb[dtype]().row_major[TPB + CONV_2 - 1]().shared().alloc()
-    shared_b = tb[dtype]().row_major[CONV_2]().shared().alloc()
+    shared_a = tb[dtype]().row_major[TPB + CONV_2 - 1]().shared().alloc()  # input slice + halo
+    shared_b = tb[dtype]().row_major[CONV_2]().shared().alloc()            # entire kernel
 
-    if global_i < SIZE_2:
-        shared_a[local_i] = a[global_i]
+    if global_i < SIZE_2:                                # guard against out-of-range reads
+        shared_a[local_i] = a[global_i]                  # coalesced load of main slice
 
-    if local_i < CONV_2:
-        shared_b[local_i] = b[local_i]
+    if local_i < CONV_2:                                 # only first CONV_2 threads participate
+        shared_b[local_i] = b[local_i]                   # load kernel into shared memory
 
-    if local_i < CONV_2 - 1:
-        var next_idx = global_i + TPB
-        shared_a[local_i + TPB] = a[next_idx] if next_idx < SIZE_2 else 0.0
+    if local_i < CONV_2 - 1:                             # threads responsible for halo load
+        var next_idx = global_i + TPB                    # element that lives in next block
+        shared_a[local_i + TPB] = a[next_idx] if next_idx < SIZE_2 else 0.0  # pad with zeros
 
-    barrier()
+    barrier()  # ensure shared memory is fully populated before computation
 
-    if global_i < SIZE_2:
+    if global_i < SIZE_2:                                # skip threads mapping past the end
         var local_sum: output.element_type = 0.0
-        @parameter
-        for j in range(CONV_2):
+        @parameter                                       # unroll small convolution
+        for j in range(CONV_2):                          # dot product of window & kernel
             local_sum += shared_a[local_i + j] * shared_b[j]
-        output[global_i] = local_sum
+        output[global_i] = local_sum                     # write result back to global memory
 
     # FILL ME IN (roughly 18 lines)
 
