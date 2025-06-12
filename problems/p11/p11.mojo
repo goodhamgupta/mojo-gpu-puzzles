@@ -54,7 +54,7 @@ fn conv_1d_simple[
     barrier()
 
     if global_i < SIZE:
-        var local_sum: out.element_type = 0
+        var local_sum: output.element_type = 0
 
         # This unrolls the loop
         # https://docs.modular.com/mojo/manual/decorators/parameter/#parametric-for-statement
@@ -63,7 +63,7 @@ fn conv_1d_simple[
             if local_i + j < SIZE:
                 local_sum += shared_size[local_i + j] * shared_conv[j]
 
-        out[global_i] = local_sum
+        output[global_i] = local_sum
     # FILL ME IN (roughly 14 lines)
 
 
@@ -124,14 +124,14 @@ fn conv_1d_block_boundary[
 
     # step 4: convolution computation
     if global_i < SIZE_2:
-        var local_sum: out.element_type = 0
+        var local_sum: output.element_type = 0
 
         @parameter
         for j in range(CONV_2):
             if local_i + j < TPB + CONV_2 - 1:
                 local_sum += shared_a[local_i + j] * shared_b[j]
 
-        out[global_i] = local_sum
+        output[global_i] = local_sum
 
     # FILL ME IN (roughly 18 lines)
 
