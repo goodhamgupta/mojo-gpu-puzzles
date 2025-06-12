@@ -36,14 +36,13 @@ fn conv_1d_simple[
 
     if global_i < SIZE:
         shared_a[local_i] = a[global_i]
-    
+
     if global_i < CONV:
         shared_b[local_i] = b[global_i]
 
     barrier()
 
     if global_i < SIZE:
-
         var local_sum: output.element_type = 0
 
         @parameter
@@ -51,7 +50,7 @@ fn conv_1d_simple[
             if local_i + j < SIZE:
                 local_sum += shared_a[local_i + j] * shared_b[j]
             barrier()
-        
+
         output[global_i] = local_sum
 
     # FILL ME IN (roughly 14 lines)
@@ -77,7 +76,30 @@ fn conv_1d_block_boundary[
     b: LayoutTensor[mut=False, dtype, conv_layout],
 ):
     global_i = block_dim.x * block_idx.x + thread_idx.x
-    local_i = thread_idx.x
+    local_i  = thread_idx.x
+
+    shared_a = tb[dtype]().row_major[TPB + CONV_2 - 1]().shared().alloc()
+    shared_b = tb[dtype]().row_major[CONV_2]().shared().alloc()
+
+    if global_i < SIZE_2:
+        shared_a[local_i] = a[global_i]
+
+    if local_i < CONV_2:
+        shared_b[local_i] = b[local_i]
+
+    if local_i < CONV_2 - 1:
+        var next_idx = global_i + TPB
+        shared_a[local_i + TPB] = a[next_idx] if next_idx < SIZE_2 else 0.0
+
+    barrier()
+
+    if global_i < SIZE_2:
+        var local_sum: output.element_type = 0.0
+        @parameter
+        for j in range(CONV_2):
+            local_sum += shared_a[local_i + j] * shared_b[j]
+        output[global_i] = local_sum
+
     # FILL ME IN (roughly 18 lines)
 
 
