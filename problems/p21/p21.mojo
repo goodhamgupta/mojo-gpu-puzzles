@@ -1,433 +1,430 @@
-from math import ceildiv
-from gpu import thread_idx, block_idx, block_dim, barrier, lane_id
+from gpu import thread_idx, block_dim, block_idx, barrier
 from gpu.host import DeviceContext
-from gpu.warp import sum as warp_sum, WARP_SIZE
-from algorithm.functional import elementwise
+from gpu.host.compile import get_gpu_target
 from layout import Layout, LayoutTensor
 from layout.tensor_builder import LayoutTensorBuild as tb
 from utils import IndexList
-from sys import argv, simdwidthof, sizeof
+from math import log2
+from algorithm.functional import elementwise, vectorize
+from sys import simdwidthof, argv
 from testing import assert_equal
-from benchmark import (
-    Bench,
-    BenchConfig,
-    Bencher,
-    BenchId,
-    keep,
-    ThroughputMeasure,
-    BenchMetric,
-    BenchmarkInfo,
-    run,
-)
+from benchmark import Bench, BenchConfig, Bencher, BenchId, keep
 
-# ANCHOR: traditional_approach_from_p10
-alias SIZE = WARP_SIZE
-alias BLOCKS_PER_GRID = (1, 1)
-alias THREADS_PER_BLOCK = (WARP_SIZE, 1)  # optimal choice for warp kernel
+# ANCHOR: elementwise_add
+alias SIZE = 1024
+alias rank = 1
+alias layout = Layout.row_major(SIZE)
 alias dtype = DType.float32
-alias SIMD_WIDTH = simdwidthof[dtype]()
-alias in_layout = Layout.row_major(SIZE)
-alias out_layout = Layout.row_major(1)
+alias SIMD_WIDTH = simdwidthof[dtype, target = get_gpu_target()]()
 
 
-fn traditional_dot_product_p10_style[
-    in_layout: Layout, out_layout: Layout, size: Int
-](
-    output: LayoutTensor[mut=True, dtype, out_layout],
-    a: LayoutTensor[mut=False, dtype, in_layout],
-    b: LayoutTensor[mut=False, dtype, in_layout],
-):
-    """
-    This is the complex approach from p10_layout_tensor.mojo - kept for comparison.
-    """
-    shared = tb[dtype]().row_major[WARP_SIZE]().shared().alloc()
-    global_i = block_dim.x * block_idx.x + thread_idx.x
-    local_i = thread_idx.x
-
-    if global_i < size:
-        shared[local_i] = (a[global_i] * b[global_i]).reduce_add()
-    else:
-        shared[local_i] = 0.0
-
-    barrier()
-
-    stride = SIZE // 2
-    while stride > 0:
-        if local_i < stride:
-            shared[local_i] += shared[local_i + stride]
-        barrier()
-        stride //= 2
-
-    if local_i == 0:
-        output[0] = shared[0]
-
-
-# ANCHOR_END: traditional_approach_from_p10
-
-# ANCHOR: simple_warp_kernel
-from gpu.warp import sum as warp_sum
-
-
-fn simple_warp_dot_product[
-    in_layout: Layout, out_layout: Layout, size: Int
-](
-    output: LayoutTensor[mut=True, dtype, out_layout],
-    a: LayoutTensor[mut=False, dtype, in_layout],
-    b: LayoutTensor[mut=False, dtype, in_layout],
-):
-    global_i = block_dim.x * block_idx.x + thread_idx.x
-    # FILL IN (6 lines at most)
-
-
-# ANCHOR_END: simple_warp_kernel
-
-
-# ANCHOR: functional_warp_approach
-fn functional_warp_dot_product[
+fn elementwise_add[
     layout: Layout, dtype: DType, simd_width: Int, rank: Int, size: Int
 ](
-    output: LayoutTensor[
-        mut=True, dtype, Layout.row_major(1), MutableAnyOrigin
-    ],
+    output: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
     a: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     b: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
     ctx: DeviceContext,
 ) raises:
     @parameter
     @always_inline
-    fn compute_dot_product[
+    fn add[
         simd_width: Int, rank: Int
     ](indices: IndexList[rank]) capturing -> None:
         idx = indices[0]
         print("idx:", idx)
-        # FILL IN (10 lines at most)
+        # FILL IN (2 to 4 lines)
 
-    # Launch exactly WARP_SIZE threads (one warp) to process all elements
-    elementwise[compute_dot_product, 1, target="gpu"](WARP_SIZE, ctx)
-
-
-# ANCHOR_END: functional_warp_approach
+    elementwise[add, SIMD_WIDTH, target="gpu"](a.size(), ctx)
 
 
-@parameter
-@always_inline
-fn benchmark_simple_warp_parameterized[test_size: Int](mut b: Bencher) raises:
+# ANCHOR_END: elementwise_add
+
+
+# ANCHOR: tiled_elementwise_add
+alias TILE_SIZE = 32
+
+
+fn tiled_elementwise_add[
+    layout: Layout,
+    dtype: DType,
+    simd_width: Int,
+    rank: Int,
+    size: Int,
+    tile_size: Int,
+](
+    output: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
+    a: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
+    b: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
+    ctx: DeviceContext,
+) raises:
     @parameter
     @always_inline
-    fn simple_warp_workflow(ctx: DeviceContext) raises:
-        alias test_layout = Layout.row_major(test_size)
-        alias test_blocks = (ceildiv(test_size, WARP_SIZE), 1)
+    fn process_tiles[
+        simd_width: Int, rank: Int
+    ](indices: IndexList[rank]) capturing -> None:
+        tile_id = indices[0]
+        print("tile_id:", tile_id)
+        out_tile = output.tile[tile_size](tile_id)
+        a_tile = a.tile[tile_size](tile_id)
+        b_tile = b.tile[tile_size](tile_id)
 
-        out = ctx.enqueue_create_buffer[dtype](1).enqueue_fill(0)
-        a = ctx.enqueue_create_buffer[dtype](test_size).enqueue_fill(0)
-        b_buf = ctx.enqueue_create_buffer[dtype](test_size).enqueue_fill(0)
+        # FILL IN (6 lines at most)
 
-        with a.map_to_host() as a_host, b_buf.map_to_host() as b_host:
-            for i in range(test_size):
-                a_host[i] = i
-                b_host[i] = i
+    num_tiles = (size + tile_size - 1) // tile_size
+    elementwise[process_tiles, 1, target="gpu"](num_tiles, ctx)
 
-        out_tensor = LayoutTensor[dtype, out_layout](out.unsafe_ptr())
-        a_tensor = LayoutTensor[dtype, test_layout](a.unsafe_ptr())
-        b_tensor = LayoutTensor[dtype, test_layout](b_buf.unsafe_ptr())
 
-        ctx.enqueue_function[
-            simple_warp_dot_product[test_layout, out_layout, test_size]
-        ](
-            out_tensor,
-            a_tensor,
-            b_tensor,
-            grid_dim=test_blocks,
-            block_dim=THREADS_PER_BLOCK,
+# ANCHOR_END: tiled_elementwise_add
+
+
+# ANCHOR: manual_vectorized_tiled_elementwise_add
+fn manual_vectorized_tiled_elementwise_add[
+    layout: Layout,
+    dtype: DType,
+    simd_width: Int,
+    num_threads_per_tile: Int,
+    rank: Int,
+    size: Int,
+    tile_size: Int,
+](
+    output: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
+    a: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
+    b: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
+    ctx: DeviceContext,
+) raises:
+    # Each tile contains tile_size groups of simd_width elements
+    alias chunk_size = tile_size * simd_width
+
+    @parameter
+    @always_inline
+    fn process_manual_vectorized_tiles[
+        num_threads_per_tile: Int, rank: Int
+    ](indices: IndexList[rank]) capturing -> None:
+        tile_id = indices[0]
+        print("tile_id:", tile_id)
+        out_tile = output.tile[chunk_size](tile_id)
+        a_tile = a.tile[chunk_size](tile_id)
+        b_tile = b.tile[chunk_size](tile_id)
+
+        # FILL IN (7 lines at most)
+
+    # Number of tiles needed: each tile processes chunk_size elements
+    num_tiles = (size + chunk_size - 1) // chunk_size
+    elementwise[
+        process_manual_vectorized_tiles, num_threads_per_tile, target="gpu"
+    ](num_tiles, ctx)
+
+
+# ANCHOR_END: manual_vectorized_tiled_elementwise_add
+
+
+# ANCHOR: vectorize_within_tiles_elementwise_add
+fn vectorize_within_tiles_elementwise_add[
+    layout: Layout,
+    dtype: DType,
+    simd_width: Int,
+    num_threads_per_tile: Int,
+    rank: Int,
+    size: Int,
+    tile_size: Int,
+](
+    output: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
+    a: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
+    b: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
+    ctx: DeviceContext,
+) raises:
+    # Each tile contains tile_size elements (not SIMD groups)
+    @parameter
+    @always_inline
+    fn process_tile_with_vectorize[
+        num_threads_per_tile: Int, rank: Int
+    ](indices: IndexList[rank]) capturing -> None:
+        tile_id = indices[0]
+        tile_start = tile_id * tile_size
+        tile_end = min(tile_start + tile_size, size)
+        actual_tile_size = tile_end - tile_start
+        print(
+            "tile_id:",
+            tile_id,
+            "tile_start:",
+            tile_start,
+            "tile_end:",
+            tile_end,
+            "actual_tile_size:",
+            actual_tile_size,
         )
-        keep(out.unsafe_ptr())
-        keep(a.unsafe_ptr())
-        keep(b_buf.unsafe_ptr())
-        ctx.synchronize()
 
-    bench_ctx = DeviceContext()
-    b.iter_custom[simple_warp_workflow](bench_ctx)
+        # FILL IN (9 lines at most)
+
+    num_tiles = (size + tile_size - 1) // tile_size
+    elementwise[
+        process_tile_with_vectorize, num_threads_per_tile, target="gpu"
+    ](num_tiles, ctx)
+
+
+# ANCHOR_END: vectorize_within_tiles_elementwise_add
 
 
 @parameter
 @always_inline
-fn benchmark_functional_warp_parameterized[
-    test_size: Int
+fn benchmark_elementwise_parameterized[
+    test_size: Int, tile_size: Int
 ](mut b: Bencher) raises:
     @parameter
     @always_inline
-    fn functional_warp_workflow(ctx: DeviceContext) raises:
-        alias test_layout = Layout.row_major(test_size)
-
-        out = ctx.enqueue_create_buffer[dtype](1).enqueue_fill(0)
+    fn elementwise_workflow(ctx: DeviceContext) raises:
+        alias layout = Layout.row_major(test_size)
+        out = ctx.enqueue_create_buffer[dtype](test_size).enqueue_fill(0)
         a = ctx.enqueue_create_buffer[dtype](test_size).enqueue_fill(0)
         b_buf = ctx.enqueue_create_buffer[dtype](test_size).enqueue_fill(0)
 
         with a.map_to_host() as a_host, b_buf.map_to_host() as b_host:
             for i in range(test_size):
-                a_host[i] = i
-                b_host[i] = i
+                a_host[i] = 2 * i
+                b_host[i] = 2 * i + 1
 
-        a_tensor = LayoutTensor[mut=False, dtype, test_layout](a.unsafe_ptr())
-        b_tensor = LayoutTensor[mut=False, dtype, test_layout](
-            b_buf.unsafe_ptr()
-        )
-        out_tensor = LayoutTensor[mut=True, dtype, Layout.row_major(1)](
-            out.unsafe_ptr()
-        )
+        a_tensor = LayoutTensor[mut=False, dtype, layout](a.unsafe_ptr())
+        b_tensor = LayoutTensor[mut=False, dtype, layout](b_buf.unsafe_ptr())
+        out_tensor = LayoutTensor[mut=True, dtype, layout](out.unsafe_ptr())
 
-        functional_warp_dot_product[
-            test_layout, dtype, SIMD_WIDTH, 1, test_size
-        ](out_tensor, a_tensor, b_tensor, ctx)
+        elementwise_add[layout, dtype, SIMD_WIDTH, rank, test_size](
+            out_tensor, a_tensor, b_tensor, ctx
+        )
         keep(out.unsafe_ptr())
-        keep(a.unsafe_ptr())
-        keep(b_buf.unsafe_ptr())
         ctx.synchronize()
 
     bench_ctx = DeviceContext()
-    b.iter_custom[functional_warp_workflow](bench_ctx)
+    b.iter_custom[elementwise_workflow](bench_ctx)
 
 
 @parameter
 @always_inline
-fn benchmark_traditional_parameterized[test_size: Int](mut b: Bencher) raises:
+fn benchmark_tiled_parameterized[
+    test_size: Int, tile_size: Int
+](mut b: Bencher) raises:
     @parameter
     @always_inline
-    fn traditional_workflow(ctx: DeviceContext) raises:
-        alias test_layout = Layout.row_major(test_size)
-        alias test_blocks = (ceildiv(test_size, WARP_SIZE), 1)
-
-        out = ctx.enqueue_create_buffer[dtype](1).enqueue_fill(0)
+    fn tiled_workflow(ctx: DeviceContext) raises:
+        alias layout = Layout.row_major(test_size)
+        out = ctx.enqueue_create_buffer[dtype](test_size).enqueue_fill(0)
         a = ctx.enqueue_create_buffer[dtype](test_size).enqueue_fill(0)
         b_buf = ctx.enqueue_create_buffer[dtype](test_size).enqueue_fill(0)
 
         with a.map_to_host() as a_host, b_buf.map_to_host() as b_host:
             for i in range(test_size):
-                a_host[i] = i
-                b_host[i] = i
+                a_host[i] = 2 * i
+                b_host[i] = 2 * i + 1
 
-        out_tensor = LayoutTensor[dtype, out_layout](out.unsafe_ptr())
-        a_tensor = LayoutTensor[dtype, test_layout](a.unsafe_ptr())
-        b_tensor = LayoutTensor[dtype, test_layout](b_buf.unsafe_ptr())
+        a_tensor = LayoutTensor[mut=False, dtype, layout](a.unsafe_ptr())
+        b_tensor = LayoutTensor[mut=False, dtype, layout](b_buf.unsafe_ptr())
+        out_tensor = LayoutTensor[mut=True, dtype, layout](out.unsafe_ptr())
 
-        ctx.enqueue_function[
-            traditional_dot_product_p10_style[
-                test_layout, out_layout, test_size
-            ]
-        ](
-            out_tensor,
-            a_tensor,
-            b_tensor,
-            grid_dim=test_blocks,
-            block_dim=THREADS_PER_BLOCK,
-        )
+        tiled_elementwise_add[
+            layout, dtype, SIMD_WIDTH, rank, test_size, tile_size
+        ](out_tensor, a_tensor, b_tensor, ctx)
         keep(out.unsafe_ptr())
-        keep(a.unsafe_ptr())
-        keep(b_buf.unsafe_ptr())
         ctx.synchronize()
 
     bench_ctx = DeviceContext()
-    b.iter_custom[traditional_workflow](bench_ctx)
+    b.iter_custom[tiled_workflow](bench_ctx)
+
+
+@parameter
+@always_inline
+fn benchmark_manual_vectorized_parameterized[
+    test_size: Int, tile_size: Int
+](mut b: Bencher) raises:
+    @parameter
+    @always_inline
+    fn manual_vectorized_workflow(ctx: DeviceContext) raises:
+        alias layout = Layout.row_major(test_size)
+        out = ctx.enqueue_create_buffer[dtype](test_size).enqueue_fill(0)
+        a = ctx.enqueue_create_buffer[dtype](test_size).enqueue_fill(0)
+        b_buf = ctx.enqueue_create_buffer[dtype](test_size).enqueue_fill(0)
+
+        with a.map_to_host() as a_host, b_buf.map_to_host() as b_host:
+            for i in range(test_size):
+                a_host[i] = 2 * i
+                b_host[i] = 2 * i + 1
+
+        a_tensor = LayoutTensor[mut=False, dtype, layout](a.unsafe_ptr())
+        b_tensor = LayoutTensor[mut=False, dtype, layout](b_buf.unsafe_ptr())
+        out_tensor = LayoutTensor[mut=True, dtype, layout](out.unsafe_ptr())
+
+        manual_vectorized_tiled_elementwise_add[
+            layout, dtype, SIMD_WIDTH, 1, rank, test_size, tile_size
+        ](out_tensor, a_tensor, b_tensor, ctx)
+        keep(out.unsafe_ptr())
+        ctx.synchronize()
+
+    bench_ctx = DeviceContext()
+    b.iter_custom[manual_vectorized_workflow](bench_ctx)
+
+
+@parameter
+@always_inline
+fn benchmark_vectorized_parameterized[
+    test_size: Int, tile_size: Int
+](mut b: Bencher) raises:
+    @parameter
+    @always_inline
+    fn vectorized_workflow(ctx: DeviceContext) raises:
+        alias layout = Layout.row_major(test_size)
+        out = ctx.enqueue_create_buffer[dtype](test_size).enqueue_fill(0)
+        a = ctx.enqueue_create_buffer[dtype](test_size).enqueue_fill(0)
+        b_buf = ctx.enqueue_create_buffer[dtype](test_size).enqueue_fill(0)
+
+        with a.map_to_host() as a_host, b_buf.map_to_host() as b_host:
+            for i in range(test_size):
+                a_host[i] = 2 * i
+                b_host[i] = 2 * i + 1
+
+        a_tensor = LayoutTensor[mut=False, dtype, layout](a.unsafe_ptr())
+        b_tensor = LayoutTensor[mut=False, dtype, layout](b_buf.unsafe_ptr())
+        out_tensor = LayoutTensor[mut=True, dtype, layout](out.unsafe_ptr())
+
+        vectorize_within_tiles_elementwise_add[
+            layout, dtype, SIMD_WIDTH, 1, rank, test_size, tile_size
+        ](out_tensor, a_tensor, b_tensor, ctx)
+        keep(out.unsafe_ptr())
+        ctx.synchronize()
+
+    bench_ctx = DeviceContext()
+    b.iter_custom[vectorized_workflow](bench_ctx)
 
 
 def main():
-    with DeviceContext() as ctx:
-        out = ctx.enqueue_create_buffer[dtype](1).enqueue_fill(0)
-        a = ctx.enqueue_create_buffer[dtype](SIZE).enqueue_fill(0)
-        b = ctx.enqueue_create_buffer[dtype](SIZE).enqueue_fill(0)
+    ctx = DeviceContext()
+    out = ctx.enqueue_create_buffer[dtype](SIZE).enqueue_fill(0)
+    a = ctx.enqueue_create_buffer[dtype](SIZE).enqueue_fill(0)
+    b = ctx.enqueue_create_buffer[dtype](SIZE).enqueue_fill(0)
+    expected = ctx.enqueue_create_host_buffer[dtype](SIZE).enqueue_fill(0)
 
-        with a.map_to_host() as a_host, b.map_to_host() as b_host:
-            for i in range(SIZE):
-                a_host[i] = i
-                b_host[i] = i
+    with a.map_to_host() as a_host, b.map_to_host() as b_host:
+        for i in range(SIZE):
+            a_host[i] = 2 * i
+            b_host[i] = 2 * i + 1
+            expected[i] = a_host[i] + b_host[i]
 
-        out_tensor = LayoutTensor[mut=True, dtype, out_layout](out.unsafe_ptr())
-        a_tensor = LayoutTensor[mut=False, dtype, in_layout](a.unsafe_ptr())
-        b_tensor = LayoutTensor[mut=False, dtype, in_layout](b.unsafe_ptr())
+    a_tensor = LayoutTensor[mut=False, dtype, layout](a.unsafe_ptr())
+    b_tensor = LayoutTensor[mut=False, dtype, layout](b.unsafe_ptr())
 
-        print("SIZE:", SIZE)
-        print("WARP_SIZE:", WARP_SIZE)
-        print("SIMD_WIDTH:", SIMD_WIDTH)
-        if argv()[1] == "--traditional":
-            ctx.enqueue_function[
-                traditional_dot_product_p10_style[in_layout, out_layout, SIZE]
-            ](
-                out_tensor,
-                a_tensor,
-                b_tensor,
-                grid_dim=BLOCKS_PER_GRID,
-                block_dim=THREADS_PER_BLOCK,
-            )
-        elif argv()[1] == "--kernel":
-            ctx.enqueue_function[
-                simple_warp_dot_product[in_layout, out_layout, SIZE]
-            ](
-                out_tensor,
-                a_tensor,
-                b_tensor,
-                grid_dim=BLOCKS_PER_GRID,
-                block_dim=THREADS_PER_BLOCK,
-            )
+    ctx.synchronize()
 
-        elif argv()[1] == "--functional":
-            functional_warp_dot_product[in_layout, dtype, SIMD_WIDTH, 1, SIZE](
-                out_tensor, a_tensor, b_tensor, ctx
-            )
+    print("SIZE:", SIZE)
+    print("simd_width:", SIMD_WIDTH)
 
-        elif argv()[1] == "--benchmark":
-            print("-" * 80)
-            bench_config = BenchConfig(max_iters=100)
-            bench = Bench(bench_config)
-
-            print("Testing SIZE=1 x WARP_SIZE, BLOCKS=1")
-            bench.bench_function[
-                benchmark_traditional_parameterized[WARP_SIZE]
-            ](BenchId("traditional_1x"))
-            bench.bench_function[
-                benchmark_simple_warp_parameterized[WARP_SIZE]
-            ](BenchId("simple_warp_1x"))
-            bench.bench_function[
-                benchmark_functional_warp_parameterized[WARP_SIZE]
-            ](BenchId("functional_warp_1x"))
-
-            print("-" * 80)
-            print("Testing SIZE=4 x WARP_SIZE, BLOCKS=4")
-            bench.bench_function[
-                benchmark_traditional_parameterized[4 * WARP_SIZE]
-            ](BenchId("traditional_4x"))
-            bench.bench_function[
-                benchmark_simple_warp_parameterized[4 * WARP_SIZE]
-            ](BenchId("simple_warp_4x"))
-            bench.bench_function[
-                benchmark_functional_warp_parameterized[4 * WARP_SIZE]
-            ](BenchId("functional_warp_4x"))
-
-            print("-" * 80)
-            print("Testing SIZE=32 x WARP_SIZE, BLOCKS=32")
-            bench.bench_function[
-                benchmark_traditional_parameterized[32 * WARP_SIZE]
-            ](BenchId("traditional_32x"))
-            bench.bench_function[
-                benchmark_simple_warp_parameterized[32 * WARP_SIZE]
-            ](BenchId("simple_warp_32x"))
-            bench.bench_function[
-                benchmark_functional_warp_parameterized[32 * WARP_SIZE]
-            ](BenchId("functional_warp_32x"))
-
-            print("-" * 80)
-            print("Testing SIZE=256 x WARP_SIZE, BLOCKS=256")
-            bench.bench_function[
-                benchmark_traditional_parameterized[256 * WARP_SIZE]
-            ](BenchId("traditional_256x"))
-            bench.bench_function[
-                benchmark_simple_warp_parameterized[256 * WARP_SIZE]
-            ](BenchId("simple_warp_256x"))
-            bench.bench_function[
-                benchmark_functional_warp_parameterized[256 * WARP_SIZE]
-            ](BenchId("functional_warp_256x"))
-
-            print("-" * 80)
-            print("Testing SIZE=2048 x WARP_SIZE, BLOCKS=2048")
-            bench.bench_function[
-                benchmark_traditional_parameterized[2048 * WARP_SIZE]
-            ](BenchId("traditional_2048x"))
-            bench.bench_function[
-                benchmark_simple_warp_parameterized[2048 * WARP_SIZE]
-            ](BenchId("simple_warp_2048x"))
-            bench.bench_function[
-                benchmark_functional_warp_parameterized[2048 * WARP_SIZE]
-            ](BenchId("functional_warp_2048x"))
-
-            print("-" * 80)
-            print("Testing SIZE=16384 x WARP_SIZE, BLOCKS=16384 (Large Scale)")
-            bench.bench_function[
-                benchmark_traditional_parameterized[16384 * WARP_SIZE]
-            ](BenchId("traditional_16384x"))
-            bench.bench_function[
-                benchmark_simple_warp_parameterized[16384 * WARP_SIZE]
-            ](BenchId("simple_warp_16384x"))
-            bench.bench_function[
-                benchmark_functional_warp_parameterized[16384 * WARP_SIZE]
-            ](BenchId("functional_warp_16384x"))
-
-            print("-" * 80)
-            print(
-                "Testing SIZE=65536 x WARP_SIZE, BLOCKS=65536 (Massive Scale)"
-            )
-            bench.bench_function[
-                benchmark_traditional_parameterized[65536 * WARP_SIZE]
-            ](BenchId("traditional_65536x"))
-            bench.bench_function[
-                benchmark_simple_warp_parameterized[65536 * WARP_SIZE]
-            ](BenchId("simple_warp_65536x"))
-            bench.bench_function[
-                benchmark_functional_warp_parameterized[65536 * WARP_SIZE]
-            ](BenchId("functional_warp_65536x"))
-
-            print(bench)
-            print("Benchmarks completed!")
-            print()
-            print("🚀 WARP OPERATIONS PERFORMANCE ANALYSIS:")
-            print(
-                "   GPU Architecture: NVIDIA (WARP_SIZE=32) vs AMD"
-                " (WARP_SIZE=64)"
-            )
-            print("   - 1 x WARP_SIZE: Single warp baseline")
-            print("   - 4 x WARP_SIZE: Few warps, warp overhead visible")
-            print("   - 32 x WARP_SIZE: Medium scale, warp benefits emerge")
-            print("   - 256 x WARP_SIZE: Large scale, dramatic warp advantages")
-            print(
-                "   - 2048 x WARP_SIZE: Massive scale, warp operations dominate"
-            )
-            print("   - 16384 x WARP_SIZE: Large scale (512K-1M elements)")
-            print("   - 65536 x WARP_SIZE: Massive scale (2M-4M elements)")
-            print(
-                "   - Note: AMD GPUs process 2 x elements per warp vs NVIDIA!"
-            )
-            print()
-            print("   Expected Results at Large Scales:")
-            print("   • Traditional: Slower due to more barrier overhead")
-            print(
-                "   • Warp operations: Faster, scale better with problem size"
-            )
-            print("   • Memory bandwidth becomes the limiting factor")
-            return
-
-        else:
-            print(
-                "Usage: --traditional | --kernel | --functional | --benchmark"
-            )
-            return
-
-        expected = ctx.enqueue_create_host_buffer[dtype](1).enqueue_fill(0)
-        ctx.synchronize()
-
-        with a.map_to_host() as a_host, b.map_to_host() as b_host:
-            for i in range(SIZE):
-                expected[0] += a_host[i] * b_host[i]
+    if argv()[1] == "--elementwise":
+        out_tensor = LayoutTensor[mut=True, dtype, layout](out.unsafe_ptr())
+        elementwise_add[layout, dtype, SIMD_WIDTH, rank, SIZE](
+            out_tensor, a_tensor, b_tensor, ctx
+        )
 
         with out.map_to_host() as out_host:
-            print("=== RESULT ===")
-            print("out:", out_host[0])
-            print("expected:", expected[0])
-            assert_equal(out_host[0], expected[0])
+            print("out:", out_host)
+            print("expected:", expected)
+            for i in range(SIZE):
+                assert_equal(out_host[i], expected[i])
 
-        if len(argv()) == 1 or argv()[1] == "--kernel":
-            print()
-            print(
-                "🚀 Notice how simple the warp version is compared to p10.mojo!"
-            )
-            print(
-                "   Same kernel structure, but warp_sum() replaces all the"
-                " complexity!"
-            )
-        elif argv()[1] == "--functional":
-            print()
-            print(
-                "🔧 Functional approach shows modern Mojo style with warp"
-                " operations!"
-            )
-            print(
-                "   Clean, composable, and still leverages warp hardware"
-                " primitives!"
-            )
+    elif argv()[1] == "--tiled":
+        out_tensor = LayoutTensor[mut=True, dtype, layout](out.unsafe_ptr())
+        print("tile size:", TILE_SIZE)
+        tiled_elementwise_add[layout, dtype, SIMD_WIDTH, rank, SIZE, TILE_SIZE](
+            out_tensor, a_tensor, b_tensor, ctx
+        )
+
+        with out.map_to_host() as out_host:
+            print("out:", out_host)
+            print("expected:", expected)
+            for i in range(SIZE):
+                assert_equal(out_host[i], expected[i])
+
+    elif argv()[1] == "--manual-vectorized":
+        out_tensor = LayoutTensor[mut=True, dtype, layout](out.unsafe_ptr())
+        print("tile size:", TILE_SIZE)
+        manual_vectorized_tiled_elementwise_add[
+            layout, dtype, SIMD_WIDTH, 1, rank, SIZE, TILE_SIZE
+        ](out_tensor, a_tensor, b_tensor, ctx)
+
+        with out.map_to_host() as out_host:
+            print("out:", out_host)
+            print("expected:", expected)
+            for i in range(SIZE):
+                assert_equal(out_host[i], expected[i])
+
+    elif argv()[1] == "--vectorized":
+        out_tensor = LayoutTensor[mut=True, dtype, layout](out.unsafe_ptr())
+        print("tile size:", TILE_SIZE)
+        vectorize_within_tiles_elementwise_add[
+            layout, dtype, SIMD_WIDTH, 1, rank, SIZE, TILE_SIZE
+        ](out_tensor, a_tensor, b_tensor, ctx)
+
+        with out.map_to_host() as out_host:
+            print("out:", out_host)
+            print("expected:", expected)
+            for i in range(SIZE):
+                assert_equal(out_host[i], expected[i])
+
+    elif argv()[1] == "--benchmark":
+        print("Running P21 GPU Benchmarks...")
+        print("SIMD width:", SIMD_WIDTH)
+        print("-" * 80)
+        bench_config = BenchConfig(max_iters=10, min_warmuptime_secs=0.2)
+        bench = Bench(bench_config)
+
+        print("Testing SIZE=16, TILE=4")
+        bench.bench_function[benchmark_elementwise_parameterized[16, 4]](
+            BenchId("elementwise_16_4")
+        )
+        bench.bench_function[benchmark_tiled_parameterized[16, 4]](
+            BenchId("tiled_16_4")
+        )
+        bench.bench_function[benchmark_manual_vectorized_parameterized[16, 4]](
+            BenchId("manual_vectorized_16_4")
+        )
+        bench.bench_function[benchmark_vectorized_parameterized[16, 4]](
+            BenchId("vectorized_16_4")
+        )
+
+        print("-" * 80)
+        print("Testing SIZE=128, TILE=16")
+        bench.bench_function[benchmark_elementwise_parameterized[128, 16]](
+            BenchId("elementwise_128_16")
+        )
+        bench.bench_function[benchmark_tiled_parameterized[128, 16]](
+            BenchId("tiled_128_16")
+        )
+        bench.bench_function[
+            benchmark_manual_vectorized_parameterized[128, 16]
+        ](BenchId("manual_vectorized_128_16"))
+
+        print("-" * 80)
+        print("Testing SIZE=128, TILE=16, Vectorize within tiles")
+        bench.bench_function[benchmark_vectorized_parameterized[128, 16]](
+            BenchId("vectorized_128_16")
+        )
+
+        print("-" * 80)
+        print("Testing SIZE=1048576 (1M), TILE=1024")
+        bench.bench_function[
+            benchmark_elementwise_parameterized[1048576, 1024]
+        ](BenchId("elementwise_1M_1024"))
+        bench.bench_function[benchmark_tiled_parameterized[1048576, 1024]](
+            BenchId("tiled_1M_1024")
+        )
+        bench.bench_function[
+            benchmark_manual_vectorized_parameterized[1048576, 1024]
+        ](BenchId("manual_vectorized_1M_1024"))
+        bench.bench_function[benchmark_vectorized_parameterized[1048576, 1024]](
+            BenchId("vectorized_1M_1024")
+        )
+
+        print(bench)
+        print("Benchmarks completed!")
+
+    else:
+        print(
+            "Usage: --elementwise | --tiled | --manual-vectorized |"
+            " --vectorized | --benchmark"
+        )

@@ -6,10 +6,21 @@ requires-python = ">=3.10"
 dependencies = [
     "max>=25.4.0.dev2025051305",
     "poethepoet>=0.34.0",
+    "torch==2.7.1",
 ]
 
 [[tool.uv.index]]
 url = "https://dl.modular.com/public/nightly/python/simple/"
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu128", marker = "sys_platform == 'linux'" },
+]
 
 [tool.uv]
 
@@ -65,7 +76,16 @@ p17 = [
     { cmd = "python problems/p17/p17.py" }
 ]
 
+p18 = "python problems/p18/p18.py"
 
-p20 = "mojo problems/p20/p20.mojo"
+p19 = "python problems/p19/p19.py"
+
+p20 = "python problems/p20/p20.py"
 
 p21 = "mojo problems/p21/p21.mojo"
+
+p22 = "mojo problems/p22/p22.mojo"
+
+p23 = "mojo problems/p23/p23.mojo"
+
+p24 = "mojo problems/p24/p24.mojo"

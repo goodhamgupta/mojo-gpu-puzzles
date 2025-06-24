@@ -47,8 +47,16 @@ fn axis_sum[
     # do reduction sum per each block
     stride = TPB // 2
     while stride > 0:
+        # Read phase: all threads read the values they need first to avoid race conditions
+        var temp_val: output.element_type = 0
         if local_i < stride:
-            cache[local_i] += cache[local_i + stride]
+            temp_val = cache[local_i + stride]
+
+        barrier()
+
+        # Write phase: all threads safely write their computed values
+        if local_i < stride:
+            cache[local_i] += temp_val
 
         barrier()
         stride //= 2

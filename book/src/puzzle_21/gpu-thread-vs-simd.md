@@ -24,7 +24,7 @@ GPU Device
 │   └── Block 2 (independent group)
 ```
 
-💡 **Note**: While this Part focuses on functional patterns, **warp-level programming** and advanced GPU memory management will be covered in detail in **[Part VI](../puzzle_21/puzzle_21.md)**.
+💡 **Note**: While this Part focuses on functional patterns, **warp-level programming** and advanced GPU memory management will be covered in detail in **[Part VI](../puzzle_22/puzzle_22.md)**.
 
 **What Mojo abstracts for you:**
 - **Grid/Block configuration**: Automatically calculated based on problem size

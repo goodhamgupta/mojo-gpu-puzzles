@@ -1,155 +1,153 @@
-# ⚡ Part VI: GPU Warp Programming - Synchronized Execution Primitives
+# Part V: Mojo Functional Patterns - High-Level GPU Programming
 
 ## Overview
 
-Welcome to **Part VI: GPU Warp Programming**! This section introduces you to GPU **warp-level primitives** - hardware-accelerated operations that leverage synchronized thread execution within warps. You'll master the art of using built-in warp operations to replace complex shared memory patterns with simple, efficient function calls.
+Welcome to **Part V: Mojo Functional Patterns**! This section introduces you to Mojo's revolutionary approach to GPU programming through **functional patterns** that abstract away low-level complexity while delivering exceptional performance. You'll master the art of writing clean, efficient parallel code that scales across thousands of GPU threads.
 
-**What you'll achieve:** Transform from complex shared memory + barrier + tree reduction patterns to elegant warp primitive calls that leverage hardware synchronization.
+**What you'll achieve:** Transform from manual GPU kernel programming to high-level functional patterns that automatically handle vectorization, memory optimization, and performance tuning.
 
-**Key insight:** _GPU warps execute in lockstep - Mojo's warp operations harness this synchronization to provide powerful parallel primitives with zero explicit synchronization._
+**Key insight:** _Modern GPU programming doesn't require sacrificing elegance for performance - Mojo's functional patterns give you both._
 
 ## What you'll learn
 
-### 🧠 **GPU warp execution model**
-Understand the fundamental hardware unit of GPU parallelism:
+### **GPU execution hierarchy**
+Understand the fundamental relationship between GPU threads and SIMD operations:
 
 ```
-GPU Block (e.g., 256 threads)
-├── Warp 0 (32 threads, SIMT lockstep execution)
-│   ├── Lane 0  ─┐
-│   ├── Lane 1   │ All execute same instruction
-│   ├── Lane 2   │ at same time (SIMT)
-│   │   ...      │
-│   └── Lane 31 ─┘
-├── Warp 1 (32 threads, independent)
-├── Warp 2 (32 threads, independent)
-└── ...
+GPU Device
+├── Grid (your entire problem)
+│   ├── Block 1 (group of threads, shared memory)
+│   │   ├── Warp 1 (32 threads, lockstep execution) --> We'll learn in Part VI
+│   │   │   ├── Thread 1 → SIMD
+│   │   │   ├── Thread 2 → SIMD
+│   │   │   └── ... (32 threads total)
+│   │   └── Warp 2 (32 threads)
+│   └── Block 2 (independent group)
 ```
 
-**Hardware reality:**
-- **32 threads per warp** on NVIDIA GPUs (`WARP_SIZE=32`)
-- **32 or 64 threads per warp** on AMD GPUs (`WARP_SIZE=32 or 64`)
-- **Lockstep execution**: All threads in a warp execute the same instruction simultaneously
-- **Zero synchronization cost**: Warp operations happen instantly within each warp
+**What Mojo abstracts for you:**
+- Grid/Block configuration automatically calculated
+- Warp management handled transparently
+- Thread scheduling optimized automatically
+- Memory hierarchy optimization built-in
 
-### ⚡ **Warp operations available in Mojo**
-Master the core warp primitives from `gpu.warp`:
+💡 **Note**: While this Part focuses on functional patterns, **warp-level programming** and advanced GPU memory management will be covered in detail in **[Part VI](../puzzle_22/puzzle_22.md)**.
 
-1. **`sum(value)`**: Sum all values across warp lanes
-2. **`shuffle_idx(value, lane)`**: Get value from specific lane
-3. **`shuffle_down(value, delta)`**: Get value from lane+delta
-4. **`prefix_sum(value)`**: Compute prefix sum across lanes
-5. **`lane_id()`**: Get current thread's lane number (0-31 or 0-63)
+### **Four fundamental patterns**
+Master the complete spectrum of GPU functional programming:
 
-### 🎯 **Performance transformation example**
-```mojo
-# Complex pattern we have seen earlier (from p10.mojo):
-shared = tb[dtype]().row_major[WARP_SIZE]().shared().alloc()
-shared[local_i] = partial_product
-barrier()
-# Tree reduction with barriers...
-stride = SIZE // 2
-while stride > 0:
-    if local_i < stride:
-        shared[local_i] += shared[local_i + stride]
-    barrier()
-    stride //= 2
+1. **Elementwise**: Maximum parallelism with automatic SIMD vectorization
+2. **Tiled**: Memory-efficient processing with cache optimization
+3. **Manual vectorization**: Expert-level control over SIMD operations
+4. **Mojo vectorize**: Safe, automatic vectorization with bounds checking
 
-# Can be replaced with the simple warp approach:
-total = sum(partial_product)
+### **Performance patterns you'll recognize**
+```
+Problem: Add two 1024-element vectors (SIZE=1024, SIMD_WIDTH=4)
+
+Elementwise:     256 threads × 1 SIMD op   = High parallelism
+Tiled:           32 threads  × 8 SIMD ops  = Cache optimization
+Manual:          8 threads   × 32 SIMD ops = Maximum control
+Mojo vectorize:  32 threads  × 8 SIMD ops  = Automatic safety
 ```
 
-### 📊 **When warp operations excel**
-Learn the performance characteristics:
+### 📊 **Real performance insights**
+Learn to interpret empirical benchmark results:
 ```
-Problem Scale         Traditional    Warp Operations
-Single warp (32)      Fast          Fastest (no barriers)
-Few warps (128)       Good          Excellent (minimal overhead)
-Many warps (1024+)    Good          Outstanding (scales linearly)
-Massive (16K+)        Bottlenecked  Memory-bandwidth limited
+Benchmark Results (SIZE=1,048,576):
+elementwise:        11.34ms  ← Maximum parallelism wins at scale
+tiled:              12.04ms  ← Good balance of locality and parallelism
+manual_vectorized:  15.75ms  ← Complex indexing hurts simple operations
+vectorized:         13.38ms  ← Automatic optimization overhead
 ```
 
 ## Prerequisites
 
-Before diving into warp programming, ensure you're comfortable with:
-- **Part V functional patterns**: Elementwise, tiled, and vectorized approaches
-- **GPU thread hierarchy**: Understanding blocks, warps, and threads
+Before diving into functional patterns, ensure you're comfortable with:
+- **Basic GPU concepts**: Memory hierarchy, thread execution, SIMD operations
+- **Mojo fundamentals**: Parameter functions, compile-time specialization, capturing semantics
 - **LayoutTensor operations**: Loading, storing, and tensor manipulation
-- **Shared memory concepts**: Why barriers and tree reduction are complex
+- **GPU memory management**: Buffer allocation, host-device synchronization
 
 ## Learning path
 
-### 🔰 **1. SIMT execution model**
-**→ [Warp Lanes & SIMT Execution](./warp_simt.md)**
+### **1. Elementwise operations**
+**→ [Elementwise - Basic GPU Functional Operations](./elementwise.md)**
 
-Understand the hardware foundation that makes warp operations possible.
-
-**What you'll master:**
-- Single Instruction, Multiple Thread (SIMT) execution model
-- Warp divergence and convergence patterns
-- Lane synchronization within warps
-- Hardware vs software thread management
-
-**Key insight:** Warps are the fundamental unit of GPU execution - understanding SIMT unlocks warp programming.
-
-### ⚡ **2. Warp sum fundamentals**
-**→ [warp.sum() Essentials](./warp_sum.md)**
-
-Master the most important warp operation through dot product implementation.
+Start with the foundation: automatic thread management and SIMD vectorization.
 
 **What you'll master:**
-- Replacing shared memory + barriers with `sum()`
-- Cross-GPU architecture compatibility (`WARP_SIZE`)
-- Kernel vs functional programming patterns with warps
-- Performance comparison with traditional approaches
+- Functional GPU programming with `elementwise`
+- Automatic SIMD vectorization within GPU threads
+- LayoutTensor operations for safe memory access
+- Capturing semantics in nested functions
 
 **Key pattern:**
 ```mojo
-partial_result = compute_per_lane_value()
-total = sum(partial_result)  # Magic happens here!
-if lane_id() == 0:
-    output[0] = total
+elementwise[add_function, SIMD_WIDTH, target="gpu"](total_size, ctx)
 ```
 
-### 📊 **3. When to use warp programming**
-**→ [When to Use Warp Programming](./warp_extra.md)**
+### **2. Tiled processing**
+**→ [Tile - Memory-Efficient Tiled Processing](./tile.md)**
 
-Learn the decision framework for choosing warp operations over alternatives.
+Build on elementwise with memory-optimized tiling patterns.
 
 **What you'll master:**
-- Problem characteristics that favor warp operations
-- Performance scaling patterns with warp count
-- Memory bandwidth vs computation trade-offs
-- Warp operation selection guidelines
+- Tile-based memory organization for cache optimization
+- Sequential SIMD processing within tiles
+- Memory locality principles and cache-friendly access patterns
+- Thread-to-tile mapping vs thread-to-element mapping
 
-**Decision framework:** When reduction operations become the bottleneck, warp primitives often provide the breakthrough.
+**Key insight:** Tiling trades parallel breadth for memory locality - fewer threads each doing more work with better cache utilization.
 
-## Key concepts to master
+### **3. Advanced vectorization**
+**→ [Vectorization - Fine-Grained SIMD Control](./vectorize.md)**
 
-### 🎯 **Hardware-software alignment**
-Understanding how Mojo's warp operations map to GPU hardware:
-- **SIMT execution**: All lanes execute same instruction simultaneously
-- **Built-in synchronization**: No explicit barriers needed within warps
-- **Cross-architecture support**: `WARP_SIZE` handles NVIDIA vs AMD differences
+Explore manual control and automatic vectorization strategies.
 
-### ⚡ **Pattern transformation**
-Converting complex parallel patterns to warp primitives:
-- **Tree reduction** → `sum()`
-- **Prefix computation** → `prefix_sum()`
-- **Data shuffling** → `shuffle_idx()`, `shuffle_down()`
+**What you'll master:**
+- Manual SIMD operations with explicit index management
+- Mojo's vectorize function for safe, automatic vectorization
+- Chunk-based memory organization for optimal SIMD alignment
+- Performance trade-offs between manual control and safety
 
-### 📈 **Performance characteristics**
-Recognizing when warp operations provide advantages:
-- **Small to medium problems**: Eliminates barrier overhead
-- **Large problems**: Reduces memory traffic and improves cache utilization
-- **Regular patterns**: Warp operations excel with predictable access patterns
+**Two approaches:**
+- **Manual**: Direct control, maximum performance, complex indexing
+- **Mojo vectorize**: Automatic optimization, built-in safety, clean code
+
+### 🧠 **4. Threading vs SIMD concepts**
+**→ [GPU Threading vs SIMD - Understanding the Execution Hierarchy](./gpu-thread-vs-simd.md)**
+
+Understand the fundamental relationship between parallelism levels.
+
+**What you'll master:**
+- GPU threading hierarchy and hardware mapping
+- SIMD operations within GPU threads
+- Pattern comparison and thread-to-work mapping
+- Choosing the right pattern for different workloads
+
+**Key insight:** GPU threads provide the parallelism structure, while SIMD operations provide the vectorization within each thread.
+
+### 📊 **5. Performance benchmarking in Mojo**
+
+**→ [Benchmarking in Mojo](./benchmarking.md)**
+
+Learn to measure, analyze, and optimize GPU performance scientifically.
+
+**What you'll master:**
+- Mojo's built-in benchmarking framework
+- GPU-specific timing and synchronization challenges
+- Parameterized benchmark functions with compile-time specialization
+- Empirical performance analysis and pattern selection
+
+**Critical technique:** Using `keep()` to prevent compiler optimization of benchmarked code.
 
 ## Getting started
 
-Ready to harness GPU warp-level parallelism? Start with understanding the SIMT execution model, then dive into practical warp sum implementation, and finish with the strategic decision framework.
+Ready to transform your GPU programming skills? Start with the elementwise pattern and work through each section systematically. Each puzzle builds on the previous concepts while introducing new levels of sophistication.
 
-💡 **Success tip**: Think of warps as **synchronized vector units** rather than independent threads. This mental model will guide you toward effective warp programming patterns.
+💡 **Success tip**: Focus on understanding the **why** behind each pattern, not just the **how**. The conceptual framework you develop here will serve you throughout your GPU programming career.
 
-🎯 **Learning objective**: By the end of Part VI, you'll recognize when warp operations can replace complex synchronization patterns, enabling you to write simpler, faster GPU code.
+**Learning objective**: By the end of Part V, you'll think in terms of functional patterns rather than low-level GPU mechanics, enabling you to write more maintainable, performant, and portable GPU code.
 
-**Ready to begin?** Start with **[SIMT Execution Model](./warp_simt.md)** and discover the power of warp-level programming!
+**Ready to begin?** Start with **[Elementwise Operations](./elementwise.md)** and discover the power of functional GPU programming!

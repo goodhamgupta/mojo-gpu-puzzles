@@ -84,6 +84,16 @@ The parallel (inclusive) prefix-sum algorithm works as follows:
 - `TPB` (Threads Per Block) = 8
 - `SIZE` (Array Size) = 8
 
+### Race Condition Prevention
+The algorithm uses explicit synchronization to prevent read-write hazards:
+- **Read Phase**: All threads first read the values they need into a local variable `current_val`
+- **Synchronization**: `barrier()` ensures all reads complete before any writes begin
+- **Write Phase**: All threads then safely write their computed values back to shared memory
+
+This prevents the race condition that would occur if threads simultaneously read from and write to the same shared memory locations.
+
+**Alternative approach**: Another solution to prevent race conditions is through _double buffering_, where you allocate twice the shared memory and alternate between reading from one buffer and writing to another. While this approach eliminates race conditions completely, it requires more shared memory and adds complexity. For educational purposes, we use the explicit synchronization approach as it's more straightforward to understand.
+
 ### Thread Mapping
 - `thread_idx.x`: \\([0, 1, 2, 3, 4, 5, 6, 7]\\) (`local_i`)
 - `block_idx.x`: \\([0, 0, 0, 0, 0, 0, 0, 0]\\)
@@ -100,6 +110,18 @@ shared:       [0    1    2    3    4    5    6    7]
 
 ### Offset = 1: First Parallel Step
 Active threads: \\(T_1 \ldots T_7\\) (where `local_i ≥ 1`)
+
+**Read Phase**: Each thread reads the value it needs:
+```txt
+T₁ reads shared[0] = 0    T₅ reads shared[4] = 4
+T₂ reads shared[1] = 1    T₆ reads shared[5] = 5
+T₃ reads shared[2] = 2    T₇ reads shared[6] = 6
+T₄ reads shared[3] = 3
+```
+
+**Synchronization**: `barrier()` ensures all reads complete
+
+**Write Phase**: Each thread adds its read value to its current position:
 ```txt
 Before:      [0    1    2    3    4    5    6    7]
 Add:              +0   +1   +2   +3   +4   +5   +6
@@ -111,6 +133,17 @@ Result:      [0    1    3    5    7    9    11   13]
 
 ### Offset = 2: Second Parallel Step
 Active threads: \\(T_2 \ldots T_7\\) (where `local_i ≥ 2`)
+
+**Read Phase**: Each thread reads the value it needs:
+```txt
+T₂ reads shared[0] = 0    T₅ reads shared[3] = 5
+T₃ reads shared[1] = 1    T₆ reads shared[4] = 7
+T₄ reads shared[2] = 3    T₇ reads shared[5] = 9
+```
+
+**Synchronization**: `barrier()` ensures all reads complete
+
+**Write Phase**: Each thread adds its read value:
 ```txt
 Before:      [0    1    3    5    7    9    11   13]
 Add:                   +0   +1   +3   +5   +7   +9
@@ -122,9 +155,19 @@ Result:      [0    1    3    6    10   14   18   22]
 
 ### Offset = 4: Third Parallel Step
 Active threads: \\(T_4 \ldots T_7\\) (where `local_i ≥ 4`)
+
+**Read Phase**: Each thread reads the value it needs:
+```txt
+T₄ reads shared[0] = 0    T₆ reads shared[2] = 3
+T₅ reads shared[1] = 1    T₇ reads shared[3] = 6
+```
+
+**Synchronization**: `barrier()` ensures all reads complete
+
+**Write Phase**: Each thread adds its read value:
 ```txt
 Before:      [0    1    3    6    10   14   18   22]
-Add:                              +0   +1   +3   +7
+Add:                              +0   +1   +3   +6
                                   |    |    |    |
 Result:      [0    1    3    6    10   15   21   28]
                                   ↑    ↑    ↑    ↑
@@ -140,60 +183,21 @@ output:       [0    1    3    6    10   15   21   28]
               T₀   T₁   T₂   T₃   T₄   T₅   T₆   T₇
 ```
 
-### Thread-by-Thread Execution
+### Key Implementation Details
 
-**\\(T_0\\) (`local_i=0`):**
-- Loads `shared[0] = 0`
-- Never adds (`local_i < offset` always)
-- Writes `output[0] = 0`
+**Synchronization Pattern**: Each iteration follows a strict read → sync → write pattern:
+1. `var current_val: out.element_type = 0` - Initialize local variable
+2. `current_val = shared[local_i - offset]` - Read phase (if conditions met)
+3. `barrier()` - Explicit synchronization to prevent race conditions
+4. `shared[local_i] += current_val` - Write phase (if conditions met)
+5. `barrier()` - Standard synchronization before next iteration
 
-**\\(T_1\\) (`local_i=1`):**
-- Loads `shared[1] = 1`
-- `offset=1`: adds `shared[0]` → 1
-- `offset=2,4`: no action (`local_i < offset`)
-- Writes `output[1] = 1`
+**Race Condition Prevention**: Without the explicit read-write separation, multiple threads could simultaneously access the same shared memory location, leading to undefined behavior. The two-phase approach with explicit synchronization ensures correctness.
 
-**\\(T_2\\) (`local_i=2`):**
-- Loads `shared[2] = 2`
-- `offset=1`: adds `shared[1]` → 3
-- `offset=2`: adds `shared[0]` → 3
-- `offset=4`: no action
-- Writes `output[2] = 3`
-
-**\\(T_3\\) (`local_i=3`):**
-- Loads `shared[3] = 3`
-- `offset=1`: adds `shared[2]` → 5
-- `offset=2`: adds `shared[1]` → 6
-- `offset=4`: no action
-- Writes `output[3] = 7`
-
-**\\(T_4\\) (`local_i=4`):**
-- Loads `shared[4] = 4`
-- `offset=1`: adds `shared[3]` → 7
-- `offset=2`: adds `shared[2]` → 10
-- `offset=4`: adds `shared[0]` → 10
-- Writes `output[4] = 10`
-
-**\\(T_5\\) (`local_i=5`):**
-- Loads `shared[5] = 5`
-- `offset=1`: adds `shared[4]` → 9
-- `offset=2`: adds `shared[3]` → 14
-- `offset=4`: adds `shared[1]` → 15
-- Writes `output[5] = 16`
-
-**\\(T_6\\) (`local_i=6`):**
-- Loads `shared[6] = 6`
-- `offset=1`: adds `shared[5]` → 11
-- `offset=2`: adds `shared[4]` → 18
-- `offset=4`: adds `shared[2]` → 21
-- Writes `output[6] = 21`
-
-**\\(T_7\\) (`local_i=7`):**
-- Loads `shared[7] = 7`
-- `offset=1`: adds `shared[6]` → 13
-- `offset=2`: adds `shared[5]` → 22
-- `offset=4`: adds `shared[3]` → 28
-- Writes `output[7] = 28`
+**Memory Safety**: The algorithm maintains memory safety through:
+- Bounds checking with `if local_i >= offset and local_i < size`
+- Proper initialization of the temporary variable
+- Coordinated access patterns that prevent data races
 
 The solution ensures correct synchronization between phases using `barrier()` and handles array bounds checking with `if global_i < size`. The final result produces the inclusive prefix sum where each element \\(i\\) contains \\(\sum_{j=0}^{i} a[j]\\).
 </div>

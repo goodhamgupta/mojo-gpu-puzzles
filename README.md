@@ -116,6 +116,12 @@ pixi run book
 # Test solutions on GPU
 pixi run tests
 
+# Run GPU sanitizers for debugging on NVIDIA GPUs using `compute-sanitizer`
+pixi run memcheck     # Detect memory errors
+pixi run racecheck    # Detect race conditions
+pixi run synccheck    # Detect synchronization errors
+pixi run initcheck    # Detect uninitialized memory access
+
 # Format code
 pixi run format
 ```

@@ -32,8 +32,13 @@ fn prefix_sum_simple[
 
     offset = 1
     for i in range(Int(log2(Scalar[dtype](TPB)))):
+        var current_val: output.element_type = 0
         if local_i >= offset and local_i < size:
-            shared[local_i] += shared[local_i - offset]
+            current_val = shared[local_i - offset]  # read
+
+        barrier()
+        if local_i >= offset and local_i < size:
+            shared[local_i] += current_val
 
         barrier()
         offset *= 2
@@ -61,7 +66,6 @@ fn prefix_sum_local_phase[
     output: LayoutTensor[mut=False, dtype, out_layout],
     a: LayoutTensor[mut=False, dtype, in_layout],
     size: Int,
-    num_blocks: Int,
 ):
     global_i = block_dim.x * block_idx.x + thread_idx.x
     local_i = thread_idx.x
@@ -70,7 +74,9 @@ fn prefix_sum_local_phase[
     # Load data into shared memory
     # Example with SIZE_2=15, TPB=8, BLOCKS=2:
     # Block 0 shared mem: [0,1,2,3,4,5,6,7]
-    # Block 1 shared mem: [8,9,10,11,12,13,14,0]  (last value padded with 0)
+    # Block 1 shared mem: [8,9,10,11,12,13,14,uninitialized]
+    # Note: The last position remains uninitialized since global_i >= size,
+    # but this is safe because that thread doesn't participate in computation
     if global_i < size:
         shared[local_i] = a[global_i]
 
@@ -84,24 +90,30 @@ fn prefix_sum_local_phase[
     #   Block 0: [0,1,3+0,5+1,7+3,9+5,11+7,13+9] = [0,1,3,6,10,14,18,22]
     # Iteration 3 (offset=4):
     #   Block 0: [0,1,3,6,10+0,14+1,18+3,22+6] = [0,1,3,6,10,15,21,28]
-    # Block 1 follows same pattern to get [8,17,27,38,50,63,77,...]
+    #   Block 1 follows same pattern to get [8,17,27,38,50,63,77,???]
     offset = 1
     for i in range(Int(log2(Scalar[dtype](TPB)))):
+        var current_val: output.element_type = 0
         if local_i >= offset and local_i < TPB:
-            shared[local_i] += shared[local_i - offset]
+            current_val = shared[local_i - offset]  # read
+
+        barrier()
+        if local_i >= offset and local_i < TPB:
+            shared[local_i] += current_val  # write
+
         barrier()
         offset *= 2
 
     # Write local results to output
     # Block 0 writes: [0,1,3,6,10,15,21,28]
-    # Block 1 writes: [8,17,27,38,50,63,77,...]
+    # Block 1 writes: [8,17,27,38,50,63,77,???]
     if global_i < size:
         output[global_i] = shared[local_i]
 
     # Store block sums in auxiliary space
-    # Block 0: Thread 7 stores 28 at position size+0 (position 15)
-    # Block 1: Thread 7 stores 77 at position size+1 (position 16)
-    # This gives us: [0,1,3,6,10,15,21,28, 8,17,27,38,50,63,77, 28,77]
+    # Block 0: Thread 7 stores shared[7] == 28 at position size+0 (position 15)
+    # Block 1: Thread 7 stores shared[7] == ??? at position size+1 (position 16).  This sum is not needed for the final output.
+    # This gives us: [0,1,3,6,10,15,21,28, 8,17,27,38,50,63,77, 28,???]
     #                                                           ↑  ↑
     #                                                     Block sums here
     if local_i == TPB - 1:
@@ -173,15 +185,9 @@ def main():
                 out_tensor,
                 a_tensor,
                 size,
-                num_blocks,
                 grid_dim=BLOCKS_PER_GRID_2,
                 block_dim=THREADS_PER_BLOCK_2,
             )
-
-            # Wait for all `blocks` to complete with using host `ctx.synchronize()`
-            # Note this is in contrast with using `barrier()` in the kernel
-            # which is a synchronization point for all threads in the same block and not across blocks.
-            ctx.synchronize()
 
             # Phase 2: Add block sums
             ctx.enqueue_function[prefix_sum_block_sum_phase[extended_layout]](

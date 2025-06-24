@@ -29,38 +29,43 @@ fn matmul_idiomatic_tiled[
     b: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
 ):
     """Idiomatic tiled matrix multiplication from p14."""
-    # Get the tile of the output matrix `out` that this thread block is responsible for
-    output_tile = output.tile[TPB, TPB](block_idx.y, block_idx.x)
-    a_shared = tb[dtype]().row_major[TPB, TPB]().shared().alloc()
-    b_shared = tb[dtype]().row_major[TPB, TPB]().shared().alloc()
     local_row = thread_idx.y
     local_col = thread_idx.x
+    tiled_row = block_idx.y * TPB + local_row
+    tiled_col = block_idx.x * TPB + local_col
+
+    # Get the tile of the output matrix that this thread block is responsible for
+    output_tile = output.tile[TPB, TPB](block_idx.y, block_idx.x)
+    a_shared = tb[dtype]().row_major[TPB, TPB]().shared().alloc().fill(0)
+    b_shared = tb[dtype]().row_major[TPB, TPB]().shared().alloc().fill(0)
 
     var acc: output.element_type = 0
 
     alias load_a_layout = Layout.row_major(1, TPB)
     alias load_b_layout = Layout.row_major(TPB, 1)
+
     for idx in range((inner + TPB - 1) // TPB):
+        # Get tiles from A and B matrices
         a_tile = a.tile[TPB, TPB](block_idx.y, idx)
         b_tile = b.tile[TPB, TPB](idx, block_idx.x)
 
+        # Asynchronously copy tiles to shared memory
         copy_dram_to_sram_async[thread_layout=load_a_layout](a_shared, a_tile)
         copy_dram_to_sram_async[thread_layout=load_b_layout](b_shared, b_tile)
 
+        # Wait for all async copies to complete
         async_copy_wait_all()
-
         barrier()
 
+        # Compute partial matrix multiplication for this tile
         @parameter
         for k in range(TPB):
-            acc = acc + a_shared[local_row, k] * b_shared[k, local_col]
+            acc += a_shared[local_row, k] * b_shared[k, local_col]
 
         barrier()
 
-    if (
-        block_idx.y * TPB + local_row < rows
-        and block_idx.x * TPB + local_col < cols
-    ):
+    # Write final result with bounds checking (needed for attention's variable sizes)
+    if tiled_row < rows and tiled_col < cols:
         output_tile[local_row, local_col] = acc
 
 
@@ -104,61 +109,66 @@ fn transpose_kernel[
 
 
 # Apply softmax to attention scores taken from p16
-fn softmax_kernel[
+fn softmax_gpu_kernel[
     layout: Layout,
-    seq_len: Int,
+    input_size: Int,
     dtype: DType = DType.float32,
 ](
-    output: LayoutTensor[mut=True, dtype, layout, MutableAnyOrigin],
-    scores: LayoutTensor[mut=False, dtype, layout, MutableAnyOrigin],
+    output: LayoutTensor[mut=True, dtype, layout],
+    input: LayoutTensor[mut=False, dtype, layout],
 ):
-    """Apply softmax to attention scores - exact p16 pattern."""
     shared_max = tb[dtype]().row_major[TPB]().shared().alloc()
     shared_sum = tb[dtype]().row_major[TPB]().shared().alloc()
     global_i = block_dim.x * block_idx.x + thread_idx.x
     local_i = thread_idx.x
 
     var thread_max: Scalar[dtype] = min_finite[dtype]()
-    if global_i < seq_len:
-        thread_max = rebind[Scalar[dtype]](scores[global_i])
+    if global_i < input_size:
+        thread_max = rebind[Scalar[dtype]](input[global_i])
 
     shared_max[local_i] = thread_max
     barrier()
 
-    # Parallel reduction to find max
+    # Parallel reduction to find max similar to reduction we saw before
+    # Note we need to avoid race conditions by reading the value first and then writing
     stride = TPB // 2
     while stride > 0:
+        var temp_max: Scalar[dtype] = min_finite[dtype]()
         if local_i < stride:
-            shared_max[local_i] = max(
-                shared_max[local_i], shared_max[local_i + stride]
-            )
+            temp_max = rebind[Scalar[dtype]](shared_max[local_i + stride])
+        barrier()
+        if local_i < stride:
+            shared_max[local_i] = max(shared_max[local_i], temp_max)
         barrier()
         stride = stride // 2
 
     block_max = shared_max[0]
 
     var exp_val: Scalar[dtype] = 0.0
-    if global_i < seq_len:
-        exp_val = rebind[Scalar[dtype]](exp(scores[global_i] - block_max))
+    if global_i < input_size:
+        exp_val = rebind[Scalar[dtype]](exp(input[global_i] - block_max))
         output[global_i] = exp_val
 
     shared_sum[local_i] = exp_val
     barrier()
 
-    # Parallel reduction for sum
+    # Parallel reduction for sum similar to reduction we saw before
+    # Note we need to avoid race conditions by reading the value first and then writing
     stride = TPB // 2
     while stride > 0:
+        var temp_sum: Scalar[dtype] = 0.0
         if local_i < stride:
-            shared_sum[local_i] = (
-                shared_sum[local_i] + shared_sum[local_i + stride]
-            )
+            temp_sum = rebind[Scalar[dtype]](shared_sum[local_i + stride])
+        barrier()
+        if local_i < stride:
+            shared_sum[local_i] += temp_sum
         barrier()
         stride = stride // 2
 
     block_sum = shared_sum[0]
 
     # Normalize by sum
-    if global_i < seq_len:
+    if global_i < input_size:
         output[global_i] = output[global_i] / block_sum
 
 
@@ -327,7 +337,7 @@ struct AttentionCustomOp:
 
             # Step 5: Apply softmax to get attention weights
             gpu_ctx.enqueue_function[
-                softmax_kernel[layout_scores, seq_len, dtype]
+                softmax_gpu_kernel[layout_scores, seq_len, dtype]
             ](
                 weights,
                 weights,

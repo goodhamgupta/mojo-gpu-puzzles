@@ -13,7 +13,7 @@ Implement a kernel that multiplies square matrices \\(A\\) and \\(B\\) using til
 
 ## Configuration
 
-- Matrix size: \\(\\text{SIZE\_TILED} = 8\\)
+- Matrix size: \\(\\text{SIZE\_TILED} = 9\\)
 - Threads per block: \\(\\text{TPB} \times \\text{TPB} = 3 \times 3\\)
 - Grid dimensions: \\(3 \times 3\\) blocks
 - Shared memory: Two \\(\\text{TPB} \times \\text{TPB}\\) LayoutTensors per block
@@ -90,10 +90,48 @@ Synchronization required:
 
 <div class="solution-tips">
 
-1. Calculate global thread positions from block and thread indices correctly
-2. Clear shared memory before loading new tiles
-3. Load tiles with proper bounds checking
-4. Accumulate results across tiles with proper synchronization
+1. Use the standard indexing convention: `local_row = thread_idx.y` and `local_col = thread_idx.x`
+2. Calculate global positions:
+
+   ```
+   global_row = block_idx.y * TPB + local_row
+   ```
+   and
+
+   ```
+   global_col = block_idx.x * TPB + local_col
+   ```
+
+   **Understanding the global indexing formula:**
+   - Each block processes a `TPB × TPB` tile of the matrix
+   - `block_idx.y` tells us which row of blocks we're in (0, 1, 2...)
+   - `block_idx.y * TPB` gives us the starting row of our block's tile
+   - `local_row` (0 to TPB-1) is our thread's offset within the block
+   - Adding them gives our thread's actual row in the full matrix
+
+       **Example with TPB=3:**
+    ```txt
+    Block Layout:        Global Matrix (9×9):
+    [B00][B01][B02]      [0 1 2 | 3 4 5 | 6 7 8]
+    [B10][B11][B12]  →   [9 A B | C D E | F G H]
+    [B20][B21][B22]      [I J K | L M N | O P Q]
+                         ——————————————————————
+                         [R S T | U V W | X Y Z]
+                         [a b c | d e f | g h i]
+                         [j k l | m n o | p q r]
+                         ——————————————————————
+                         [s t u | v w x | y z α]
+                         [β γ δ | ε ζ η | θ ι κ]
+                         [λ μ ν | ξ ο π | ρ σ τ]
+
+    Thread(1,2) in Block(1,0):
+    - block_idx.y = 1, local_row = 1
+    - global_row = 1 * 3 + 1 = 4
+    - This thread handles row 4 of the matrix
+    ```
+3. Allocate shared memory (now pre-initialized with `.fill(0)`)
+4. With 9×9 perfect tiling, no bounds checking needed!
+5. Accumulate results across tiles with proper synchronization
 </div>
 </details>
 
@@ -124,8 +162,8 @@ pixi run p14 --tiled
 
 Your output will look like this if the puzzle isn't solved yet:
 ```txt
-out: HostBuffer([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-expected: HostBuffer([2240.0, 2296.0, 2352.0, 2408.0, 2464.0, 2520.0, 2576.0, 2632.0, 5824.0, 6008.0, 6192.0, 6376.0, 6560.0, 6744.0, 6928.0, 7112.0, 9408.0, 9720.0, 10032.0, 10344.0, 10656.0, 10968.0, 11280.0, 11592.0, 12992.0, 13432.0, 13872.0, 14312.0, 14752.0, 15192.0, 15632.0, 16072.0, 16576.0, 17144.0, 17712.0, 18280.0, 18848.0, 19416.0, 19984.0, 20552.0, 20160.0, 20856.0, 21552.0, 22248.0, 22944.0, 23640.0, 24336.0, 25032.0, 23744.0, 24568.0, 25392.0, 26216.0, 27040.0, 27864.0, 28688.0, 29512.0, 27328.0, 28280.0, 29232.0, 30184.0, 31136.0, 32088.0, 33040.0, 33992.0])
+out: HostBuffer([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+expected: HostBuffer([3672.0, 3744.0, 3816.0, 3888.0, 3960.0, 4032.0, 4104.0, 4176.0, 4248.0, 9504.0, 9738.0, 9972.0, 10206.0, 10440.0, 10674.0, 10908.0, 11142.0, 11376.0, 15336.0, 15732.0, 16128.0, 16524.0, 16920.0, 17316.0, 17712.0, 18108.0, 18504.0, 21168.0, 21726.0, 22284.0, 22842.0, 23400.0, 23958.0, 24516.0, 25074.0, 25632.0, 27000.0, 27720.0, 28440.0, 29160.0, 29880.0, 30600.0, 31320.0, 32040.0, 32760.0, 32832.0, 33714.0, 34596.0, 35478.0, 36360.0, 37242.0, 38124.0, 39006.0, 39888.0, 38664.0, 39708.0, 40752.0, 41796.0, 42840.0, 43884.0, 44928.0, 45972.0, 47016.0, 44496.0, 45702.0, 46908.0, 48114.0, 49320.0, 50526.0, 51732.0, 52938.0, 54144.0, 50328.0, 51696.0, 53064.0, 54432.0, 55800.0, 57168.0, 58536.0, 59904.0, 61272.0])
 ```
 
 ## Solution: Manual tiling
@@ -139,31 +177,36 @@ expected: HostBuffer([2240.0, 2296.0, 2352.0, 2408.0, 2464.0, 2520.0, 2576.0, 26
 
 <div class="solution-explanation">
 
-The tiled matrix multiplication implementation demonstrates efficient handling of large matrices \\((8 \times 8)\\) using small tiles \\((3 \times 3)\\). Here's how it works:
+The tiled matrix multiplication implementation demonstrates efficient handling of matrices \\((9 \times 9)\\) using small tiles \\((3 \times 3)\\). Here's how it works:
 
 1. **Thread indexing setup**
-   - Global position calculation:
-     ```txt
-     tiled_row = block_idx.y * TPB + thread_idx.y
-     tiled_col = block_idx.x * TPB + thread_idx.x
+   - The problem template provides the standard indexing convention:
+     ```mojo
+     local_row = thread_idx.y  # y for row
+     local_col = thread_idx.x  # x for col
+     global_row = block_idx.y * TPB + local_row
+     global_col = block_idx.x * TPB + local_col
      ```
-   - Local position in tile:
-     ```txt
-     local_row = thread_idx.y
-     local_col = thread_idx.x
+   - The solution uses the same consistent indexing:
+     ```mojo
+     tiled_row = block_idx.y * TPB + thread_idx.y  # y for row
+     tiled_col = block_idx.x * TPB + thread_idx.x  # x for col
+     local_row = thread_idx.y  # y for row
+     local_col = thread_idx.x  # x for col
      ```
 
 2. **Shared memory allocation**
    ```txt
-   Input matrices (8×8):
-   A = [0  1  2  3  4  5  6  7 ]    B = [0  2  4  6  8  10 12 14]
-       [8  9  10 11 12 13 14 15]        [16 18 20 22 24 26 28 30]
-       [16 17 18 19 20 21 22 23]        [32 34 36 38 40 42 44 46]
-       [24 25 26 27 28 29 30 31]        [48 50 52 54 56 58 60 62]
-       [32 33 34 35 36 37 38 39]        [64 66 68 70 72 74 76 78]
-       [40 41 42 43 44 45 46 47]        [80 82 84 86 88 90 92 94]
-       [48 49 50 51 52 53 54 55]        [96 98 100 102 104 106 108 110]
-       [56 57 58 59 60 61 62 63]        [112 114 116 118 120 122 124 126]
+   Input matrices (9×9) - Perfect fit for 3×3 tiling:
+   A = [0  1  2  3  4  5  6  7  8 ]    B = [0  2  4  6  8  10 12 14 16]
+       [9  10 11 12 13 14 15 16 17]        [18 20 22 24 26 28 30 32 34]
+       [18 19 20 21 22 23 24 25 26]        [36 38 40 42 44 46 48 50 52]
+       [27 28 29 30 31 32 33 34 35]        [54 56 58 60 62 64 66 68 70]
+       [36 37 38 39 40 41 42 43 44]        [72 74 76 78 80 82 84 86 88]
+       [45 46 47 48 49 50 51 52 53]        [90 92 94 96 98 100 102 104 106]
+       [54 55 56 57 58 59 60 61 62]        [108 110 112 114 116 118 120 122 124]
+       [63 64 65 66 67 68 69 70 71]        [126 128 130 132 134 136 138 140 142]
+       [72 73 74 75 76 77 78 79 80]        [144 146 148 150 152 154 156 158 160]
 
    Shared memory per block (3×3):
    a_shared[TPB, TPB]  b_shared[TPB, TPB]
@@ -171,30 +214,25 @@ The tiled matrix multiplication implementation demonstrates efficient handling o
 
 3. **Tile processing loop**
    ```txt
-   Number of tiles = (8 + 3 - 1) // 3 = 3 tiles
+   Number of tiles = 9 // 3 = 3 tiles (perfect division!)
 
    For each tile:
-   1. Reset shared memory
-   2. Load tile from A and B
+   1. Shared memory already initialized with .fill(0)
+   2. Load tile from A and B (no bounds checking needed!)
    3. Compute partial products
    4. Accumulate in register
    ```
 
 4. **Memory loading pattern**
-   - Loading A tile:
+   - With perfect 9×9 tiling, no bounds checking needed:
      ```txt
-     if tiled_row < size and (tile * TPB + local_col) < size:
-         a_shared[local_row, local_col] = a[tiled_row, tile * TPB + local_col]
-     ```
-   - Loading B tile:
-     ```txt
-     if (tile * TPB + local_row) < size and tiled_col < size:
-         b_shared[local_row, local_col] = b[tile * TPB + local_row, tiled_col]
+     a_shared[local_row, local_col] = a[tiled_row, tile * TPB + local_col]
+     b_shared[local_row, local_col] = b[tile * TPB + local_row, tiled_col]
      ```
 
 5. **Computation within tile**
    ```txt
-   For k in range(min(TPB, size - tile * TPB)):
+   For k in range(TPB):  # No need for min() - all tiles are full!
        acc += a_shared[local_row, k] * b_shared[k, local_col]
    ```
    - Maximizes memory coalescing:
@@ -220,20 +258,19 @@ The tiled matrix multiplication implementation demonstrates efficient handling o
    ```
 
 Key performance features:
-- Processes 8×8 matrix using 3×3 tiles
+- Processes 9×9 matrix using 3×3 tiles (perfect fit!)
 - Uses shared memory for fast tile access
 - Minimizes global memory transactions
-- Handles matrix boundaries correctly
+- No boundary checking needed - all tiles are full
 - Maintains coalesced memory access
 
-2. **Boundary handling**:
+7. **Result writing**:
    ```mojo
-   if row < size and col < size:
-       output[row, col] = acc
+   output[tiled_row, tiled_col] = acc
    ```
-   - Prevents out-of-bounds access
-   - Handles matrix edges
-   - Safe result writing
+   - With perfect 9×9 tiling, no bounds checking needed
+   - Direct assignment to output matrix
+   - All threads write valid results
 
 ### Key optimizations
 
@@ -268,7 +305,7 @@ This implementation achieves high performance through:
 
 <div class="solution-explanation">
 
-The idiomatic tiled matrix multiplication leverages Mojo's LayoutTensor API and asynchronous memory operations for a cleaner implementation:
+The idiomatic tiled matrix multiplication leverages Mojo's LayoutTensor API and asynchronous memory operations for a beautifully clean implementation. With the 9×9 matrix size, we get perfect tiling that eliminates all boundary checks:
 
 1. **LayoutTensor tile API**
    ```mojo
@@ -298,30 +335,20 @@ The idiomatic tiled matrix multiplication leverages Mojo's LayoutTensor API and 
    - `load_a_layout`: Each thread loads a slice of a row (coalesced access)
    - `load_b_layout`: Each thread loads a slice of a column (transposed access)
 
-4. **Efficient thread synchronization**
+4. **Perfect tiling eliminates boundary checks**
    ```mojo
-   // Wait for async operations to complete
-   async_copy_wait_all()
-   // Ensure all threads can see the shared memory contents
-   barrier()
+   @parameter
+   for idx in range(size // TPB):  # Perfect division: 9 // 3 = 3
    ```
-   The barriers ensure proper synchronization:
-   - After memory transfers complete
-   - After computation for each tile
+   With 9×9 matrices and 3×3 tiles, every tile is exactly full-sized. No boundary checking needed!
 
-5. **Proper boundary handling**
+5. **Clean tile processing with defensive bounds checking**
    ```mojo
-   if block_idx.y * TPB + local_row < size and block_idx.x * TPB + local_col < size:
+   # Defensive bounds checking included even with perfect tiling
+   if tiled_row < size and tiled_col < size:
        out_tile[local_row, local_col] = acc
    ```
-   This critical check prevents out-of-bounds writes for blocks at the matrix boundaries.
-
-6. **Tile processing loop**
-   ```mojo
-   for idx in range((size + TPB - 1) // TPB):
-      // Process one tile
-   ```
-   Uses ceiling division to handle matrices whose dimensions aren't perfect multiples of the tile size.
+   With perfect 9×9 tiling, this bounds check is technically unnecessary but included for defensive programming and consistency with other matrix sizes.
 
 ### Performance considerations
 
@@ -343,7 +370,7 @@ This implementation shows how high-level abstractions can express complex GPU al
 | Tile loading | Explicit element-by-element copying | Asynchronous bulk transfers |
 | Shared memory | Manual initialization (zeroing) | Managed by copy functions |
 | Code complexity | More verbose with explicit indexing | More concise with higher-level APIs |
-| Bounds checking | Multiple checks during loading and computing | Single check at final write |
+| Bounds checking | Multiple checks during loading and computing | Single defensive check at final write |
 
 The idiomatic approach is not just cleaner but also potentially more performant due to the use of specialized memory layouts and asynchronous operations.
 </div>

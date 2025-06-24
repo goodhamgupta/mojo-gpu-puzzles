@@ -1,4 +1,4 @@
-# 🧠 Warp Lanes & SIMT Execution
+# 🧠 Warp lanes & SIMT execution
 
 ## Mental model for warp programming vs SIMD
 

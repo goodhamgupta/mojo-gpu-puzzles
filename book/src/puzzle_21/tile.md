@@ -1,4 +1,4 @@
-# ⚡ Tile - Memory-Efficient Tiled Processing
+# Tile - Memory-Efficient Tiled Processing
 
 ## Overview
 
@@ -35,9 +35,9 @@ But with a completely different execution strategy optimized for memory hierarch
 ## Code to complete
 
 ```mojo
-{{#include ../../../problems/p20/p20.mojo:tiled_elementwise_add}}
+{{#include ../../../problems/p21/p21.mojo:tiled_elementwise_add}}
 ```
-<a href="{{#include ../_includes/repo_url.md}}/blob/main/problems/p20/p20.mojo" class="filename">View full file: problems/p20/p20.mojo</a>
+<a href="{{#include ../_includes/repo_url.md}}/blob/main/problems/p21/p21.mojo" class="filename">View full file: problems/p21/p21.mojo</a>
 
 <details>
 <summary><strong>Tips</strong></summary>
@@ -109,14 +109,14 @@ To test your solution, run the following command in your terminal:
   <div class="tab-content">
 
 ```bash
-uv run poe p20 --tiled
+uv run poe p21 --tiled
 ```
 
   </div>
   <div class="tab-content">
 
 ```bash
-pixi run p20 --tiled
+pixi run p21 --tiled
 ```
 
   </div>
@@ -146,7 +146,7 @@ expected: HostBuffer([1.0, 5.0, 9.0, ..., 4085.0, 4089.0, 4093.0])
 <summary></summary>
 
 ```mojo
-{{#include ../../../solutions/p20/p20.mojo:tiled_elementwise_add_solution}}
+{{#include ../../../solutions/p21/p21.mojo:tiled_elementwise_add_solution}}
 ```
 
 <div class="solution-explanation">
@@ -314,7 +314,7 @@ The choice between elementwise and tiled patterns depends on your specific workl
 
 Now that you understand both elementwise and tiled patterns:
 
-- **[🔧 Vectorization](./vectorize.md)**: Fine-grained control over SIMD operations
+- **[Vectorization](./vectorize.md)**: Fine-grained control over SIMD operations
 - **[🧠 GPU Threading vs SIMD](./gpu-thread-vs-simd.md)**: Understanding the execution hierarchy
 - **[📊 Benchmarking](./benchmarking.md)**: Performance analysis and optimization
 

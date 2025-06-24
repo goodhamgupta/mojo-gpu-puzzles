@@ -35,13 +35,16 @@ fn softmax_gpu_kernel[
     shared_max[local_i] = thread_max
     barrier()
 
-    # Parallel reduction to find max
+    # Parallel reduction to find max similar to reduction we saw before
+    # Note we need to avoid race conditions by reading the value first and then writing
     stride = TPB // 2
     while stride > 0:
+        var temp_max: Scalar[dtype] = min_finite[dtype]()
         if local_i < stride:
-            shared_max[local_i] = max(
-                shared_max[local_i], shared_max[local_i + stride]
-            )
+            temp_max = rebind[Scalar[dtype]](shared_max[local_i + stride])
+        barrier()
+        if local_i < stride:
+            shared_max[local_i] = max(shared_max[local_i], temp_max)
         barrier()
         stride = stride // 2
 
@@ -55,11 +58,16 @@ fn softmax_gpu_kernel[
     shared_sum[local_i] = exp_val
     barrier()
 
-    # Parallel reduction for sum
+    # Parallel reduction for sum similar to reduction we saw before
+    # Note we need to avoid race conditions by reading the value first and then writing
     stride = TPB // 2
     while stride > 0:
+        var temp_sum: Scalar[dtype] = 0.0
         if local_i < stride:
-            shared_sum[local_i] += shared_sum[local_i + stride]
+            temp_sum = rebind[Scalar[dtype]](shared_sum[local_i + stride])
+        barrier()
+        if local_i < stride:
+            shared_sum[local_i] += temp_sum
         barrier()
         stride = stride // 2
 
@@ -129,15 +137,17 @@ struct SoftmaxCustomOp:
         if target == "gpu":
             gpu_ctx = ctx.get_device_context()
             # making sure the output tensor is zeroed out before the kernel is called
-            # gpu_ctx.enqueue_memset(
-            #     DeviceBuffer[output.type](
-            #         gpu_ctx,
-            #         rebind[UnsafePointer[Scalar[output.type]]](out_tensor.ptr),
-            #         input_size,
-            #         owning=False,
-            #     ),
-            #     0,
-            # )
+            gpu_ctx.enqueue_memset(
+                DeviceBuffer[output_tensor.dtype](
+                    gpu_ctx,
+                    rebind[UnsafePointer[Scalar[output_tensor.dtype]]](
+                        output_tensor.ptr
+                    ),
+                    input_size,
+                    owning=False,
+                ),
+                0,
+            )
 
             gpu_ctx.enqueue_function[
                 softmax_gpu_kernel[layout, input_size, dtype]

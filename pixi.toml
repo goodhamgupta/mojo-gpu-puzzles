@@ -1,15 +1,49 @@
 [project]
 authors = ["Modular <hello@modular.com>"]
-channels = ["https://conda.modular.com/max-nightly", "https://conda.modular.com/max", "https://repo.prefix.dev/modular-community", "conda-forge"]
+channels = ["https://conda.modular.com/max-nightly", "conda-forge"]
 name = "mojo-gpu-puzzles"
-platforms = ["linux-64", "osx-arm64"]
+platforms = ["linux-64"]
 version = "0.0.0"
+
+[feature.cuda]
+system-requirements = { cuda = "12" }
+channels = ["nvidia"]
+
+[feature.cuda.dependencies]
+cuda-toolkit = "12.*" # for compute-sanitizer etc.
+
+[feature.cuda.pypi-dependencies]
+torch = { version = "==2.7.1", index = "https://download.pytorch.org/whl/cu128" }
+
+[feature.rocm]
+system-requirements = {}
+
+[feature.rocm.pypi-dependencies]
+torch = { version = "==2.7.1", index = "https://download.pytorch.org/whl/rocm6.3" }
+pytorch-triton-rocm = {version = "*", index = "https://download.pytorch.org/whl/rocm6.3" }
+
+[dependencies]
+python = ">=3.10,<3.13"
+max = "*"
+bash = ">=5.2.21,<6"
+manim = ">=0.18.1,<0.19"
+mdbook = ">=0.4.48,<0.5"
+pre-commit = ">=4.2.0,<5"
+
+[environments]
+cuda = { features = ["cuda"] }
+rocm = { features = ["rocm"] }
+default = { features = ["cuda"] }
 
 [tasks]
 install-pre-commit = "pre-commit install"
 format = { cmd="mojo format problems solutions", depends-on = ["install-pre-commit"] }
 
 tests = { cmd = "bash solutions/run.sh" }
+memcheck = { cmd = "bash solutions/sanitizer.sh memcheck" }
+racecheck = { cmd = "bash solutions/sanitizer.sh racecheck" }
+synccheck = { cmd = "bash solutions/sanitizer.sh synccheck" }
+initcheck = { cmd = "bash solutions/sanitizer.sh initcheck" }
 
 build-book = "cd book && mdbook build"
 book = { cmd = "cd book && mdbook serve --open", depends-on = ["build-book"] }
@@ -74,17 +108,18 @@ p16 = { cmd = "python problems/p16/p16.py", depends-on = ["p16-package"] }
 
 p17 = "mojo package problems/p17/op -o problems/p17/op.mojopkg && python problems/p17/p17.py"
 
-p20 = "mojo problems/p20/p20.mojo"
+p18 = "python problems/p18/p18.py"
+
+p19 = "python problems/p19/p19.py"
+
+p20 = "python problems/p20/p20.py"
 
 p21 = "mojo problems/p21/p21.mojo"
 
-all-animations = { cmd = "echo 'All animations generated!'", depends-on = ["viz01", "viz02", "viz03", "viz04", "viz05", "viz06", "viz07", "viz08", "viz09", "viz10", "viz11", "viz12", "viz13", "viz14", "rooflineviz"] }
+p22 = "mojo problems/p22/p22.mojo"
 
-[dependencies]
-max = "*"
-bash = ">=5.2.21,<6"
-python = ">=3.11,<3.13"
-manim = ">=0.18.1,<0.19"
-mdbook = ">=0.4.48,<0.5"
-pre-commit = ">=4.2.0,<5"
-pygame = ">=2.6.1,<3"
+p23 = "mojo problems/p23/p23.mojo"
+
+p24 = "mojo problems/p24/p24.mojo"
+
+all-animations = { cmd = "echo 'All animations generated!'", depends-on = ["viz01", "viz02", "viz03", "viz04", "viz05", "viz06", "viz07", "viz08", "viz09", "viz10", "viz11", "viz12", "viz13", "viz14", "rooflineviz"] }

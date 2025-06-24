@@ -35,32 +35,36 @@ fn matmul_idiomatic_tiled[
     b_shared = tb[dtype]().row_major[TPB, TPB]().shared().alloc()
     local_row = thread_idx.y
     local_col = thread_idx.x
+    tiled_row = block_idx.y * TPB + local_row
+    tiled_col = block_idx.x * TPB + local_col
 
     var acc: output.element_type = 0
 
     alias load_a_layout = Layout.row_major(1, TPB)
     alias load_b_layout = Layout.row_major(TPB, 1)
+
     for idx in range((inner + TPB - 1) // TPB):
+        # Get tiles from A and B matrices
         a_tile = a.tile[TPB, TPB](block_idx.y, idx)
         b_tile = b.tile[TPB, TPB](idx, block_idx.x)
 
+        # Asynchronously copy tiles to shared memory
         copy_dram_to_sram_async[thread_layout=load_a_layout](a_shared, a_tile)
         copy_dram_to_sram_async[thread_layout=load_b_layout](b_shared, b_tile)
 
+        # Wait for all async copies to complete
         async_copy_wait_all()
-
         barrier()
 
+        # Compute partial matrix multiplication for this tile
         @parameter
         for k in range(TPB):
-            acc = acc + a_shared[local_row, k] * b_shared[k, local_col]
+            acc += a_shared[local_row, k] * b_shared[k, local_col]
 
         barrier()
 
-    if (
-        block_idx.y * TPB + local_row < rows
-        and block_idx.x * TPB + local_col < cols
-    ):
+    # Write final result with bounds checking (needed for attention's variable sizes)
+    if tiled_row < rows and tiled_col < cols:
         out_tile[local_row, local_col] = acc
 
 
@@ -89,7 +93,7 @@ fn transpose_kernel[
     barrier()
 
     if global_row < cols and global_col < rows:
-        out[global_row, global_col] = shared[local_col, local_row]
+        output[global_row, global_col] = shared[local_col, local_row]
 
 
 # ANCHOR_END: transpose_kernel
@@ -214,10 +218,10 @@ struct AttentionCustomOp:
         d: Int,
         dtype: DType = DType.float32,
     ](
-        output: OutputTensor[dtype=dtype, rank=1],  # Output vector (d,)
-        q: InputTensor[dtype=dtype, rank=1],  # Query vector (d,)
-        k: InputTensor[dtype=dtype, rank=2],  # Key matrix (seq_len, d)
-        v: InputTensor[dtype=dtype, rank=2],  # Value matrix (seq_len, d)
+        output: OutputTensor[rank=1],  # Output vector (d,)
+        q: InputTensor[rank=1],  # Query vector (d,)
+        k: InputTensor[rank=2],  # Key matrix (seq_len, d)
+        v: InputTensor[rank=2],  # Value matrix (seq_len, d)
         ctx: DeviceContextPtr,
     ) raises:
         # Define layouts
@@ -340,7 +344,7 @@ struct AttentionCustomOp:
             # Reuse out_tensor reshaped as (1, d) for result
             # FILL ME IN 2 lines
 
-            result_2d = out_tensor.reshape[layout_result_2d]()
+            result_2d = output_tensor.reshape[layout_result_2d]()
             gpu_ctx.enqueue_function[
                 matmul_idiomatic_tiled[layout_weights_2d, 1, SEQ_LEN, d, dtype]
             ](

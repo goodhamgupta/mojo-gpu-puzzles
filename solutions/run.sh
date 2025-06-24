@@ -2,58 +2,42 @@
 
 run_mojo_files() {
   local path_prefix="$1"
-  local current_dir=$(pwd)
 
   for f in *.mojo; do
     if [ -f "$f" ] && [ "$f" != "__init__.mojo" ]; then
-      echo "=== Running ${path_prefix}$f ==="
-      # Extract flags for Mojo files
-      flags=$(grep -o 'argv()\[1\] == "--[^"]*"' "$f" | cut -d'"' -f2)
-
-      # Get the directory of the file and change to it
-      file_dir=$(dirname "$f")
-      file_name=$(basename "$f")
-      cd "$file_dir" || continue
+      # Extract flags for Mojo files (skip demo flags)
+      flags=$(grep -o 'argv()\[1\] == "--[^"]*"' "$f" | cut -d'"' -f2 | grep -v '^--demo')
 
       if [ -z "$flags" ]; then
-        mojo "$file_name" || echo "Failed: ${path_prefix}$f"
+        echo "=== Running ${path_prefix}$f ==="
+        mojo "$f" --sanitize address --sanitize thread || echo "Failed: ${path_prefix}$f"
       else
         for flag in $flags; do
-          echo "Running ${path_prefix}$f with $flag"
-          mojo "$file_name" "$flag" || echo "Failed: ${path_prefix}$f with $flag"
+          echo "=== Running ${path_prefix}$f with flag: $flag ==="
+          mojo "$f" "$flag" --sanitize address --sanitize thread || echo "Failed: ${path_prefix}$f with $flag"
         done
       fi
-
-      cd "$current_dir" || exit 1
     fi
   done
 }
 
 run_python_files() {
   local path_prefix="$1"
-  local current_dir=$(pwd)
 
   for f in *.py; do
     if [ -f "$f" ]; then
-      echo "=== Running ${path_prefix}$f ==="
-      # Extract flags for Python files (sys.argv[1] pattern)
-      flags=$(grep -o 'sys\.argv\[1\] == "--[^"]*"' "$f" | cut -d'"' -f2)
-
-      # Get the directory of the file and change to it
-      file_dir=$(dirname "$f")
-      file_name=$(basename "$f")
-      cd "$file_dir" || continue
+      # Extract flags for Python files (sys.argv[1] pattern, skip demo flags)
+      flags=$(grep -o 'sys\.argv\[1\] == "--[^"]*"' "$f" | cut -d'"' -f2 | grep -v '^--demo')
 
       if [ -z "$flags" ]; then
-        python "$file_name" || echo "Failed: ${path_prefix}$f"
+        echo "=== Running ${path_prefix}$f ==="
+        python "$f" || echo "Failed: ${path_prefix}$f"
       else
         for flag in $flags; do
-          echo "Running ${path_prefix}$f with $flag"
-          python "$file_name" "$flag" || echo "Failed: ${path_prefix}$f with $flag"
+          echo "=== Running ${path_prefix}$f with flag: $flag ==="
+          python "$f" "$flag" || echo "Failed: ${path_prefix}$f with $flag"
         done
       fi
-
-      cd "$current_dir" || exit 1
     fi
   done
 }
@@ -72,7 +56,7 @@ for dir in p*/; do
     echo "=== Testing solutions in ${dir} ==="
     cd "$dir" || continue
 
-    process_directory ""
+    process_directory "${dir}"
 
     # Check for test directory and run mojo test
     if [ -d "test" ] || [ -d "tests" ]; then

@@ -1,4 +1,4 @@
-# 🔰 Elementwise - Basic GPU Functional Operations
+# Elementwise - Basic GPU Functional Operations
 
 Implement a kernel that adds two vectors element-wise using Mojo's functional `elementwise` pattern. Each thread will process multiple SIMD elements automatically, demonstrating how modern GPU programming abstracts away low-level details while maintaining high performance.
 
@@ -28,9 +28,9 @@ But the implementation teaches fundamental patterns for all GPU functional progr
 ## Code to complete
 
 ```mojo
-{{#include ../../../problems/p20/p20.mojo:elementwise_add}}
+{{#include ../../../problems/p21/p21.mojo:elementwise_add}}
 ```
-<a href="{{#include ../_includes/repo_url.md}}/blob/main/problems/p20/p20.mojo" class="filename">View full file: problems/p20/p20.mojo</a>
+<a href="{{#include ../_includes/repo_url.md}}/blob/main/problems/p21/p21.mojo" class="filename">View full file: problems/p21/p21.mojo</a>
 
 <details>
 <summary><strong>Tips</strong></summary>
@@ -110,14 +110,14 @@ To test your solution, run the following command in your terminal:
   <div class="tab-content">
 
 ```bash
-uv run poe p20 --elementwise
+uv run poe p21 --elementwise
 ```
 
   </div>
   <div class="tab-content">
 
 ```bash
-pixi run p20 --elementwise
+pixi run p21 --elementwise
 ```
 
   </div>
@@ -144,7 +144,7 @@ expected: HostBuffer([1.0, 5.0, 9.0, ..., 4085.0, 4089.0, 4093.0])
 <summary></summary>
 
 ```mojo
-{{#include ../../../solutions/p20/p20.mojo:elementwise_add_solution}}
+{{#include ../../../solutions/p21/p21.mojo:elementwise_add_solution}}
 ```
 
 <div class="solution-explanation">
@@ -315,8 +315,8 @@ This pattern represents the future of GPU programming - high-level abstractions 
 
 Once you've mastered elementwise operations, you're ready for:
 
-- **[⚡ Tile Operations](./tile.md)**: Memory-efficient tiled processing patterns
-- **[🔧 Vectorization](./vectorize.md)**: Fine-grained SIMD control
+- **[Tile Operations](./tile.md)**: Memory-efficient tiled processing patterns
+- **[Vectorization](./vectorize.md)**: Fine-grained SIMD control
 - **[🧠 GPU Threading vs SIMD](./gpu-thread-vs-simd.md)**: Understanding the execution hierarchy
 - **[📊 Benchmarking](./benchmarking.md)**: Performance analysis and optimization
 

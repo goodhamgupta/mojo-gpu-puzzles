@@ -1,153 +1,108 @@
-# 🚀 Part V: Mojo Functional Patterns - High-Level GPU Programming
+# Puzzle 20: Kernel Fusion and Custom Backward Pass
+
+> ## Kernel fusion and autograd integration
+>
+> We're continuing Part IV with a focus on **kernel fusion** and **autograd integration**.
+>
+> Building on [Puzzle 19](../puzzle_19/puzzle_19.md), you'll now explore how to combine multiple operations into a single efficient kernel and integrate it with PyTorch's autograd system. You'll learn:
+> - How kernel fusion improves performance in both forward and backward passes
+> - Why custom backward passes are crucial for fused operations
+> - How to design fused kernels with proper gradient flow
+> - The performance implications of different fusion strategies
+>
+> This puzzle demonstrates that **how you combine operations** can be as important as **how you implement them**.
 
 ## Overview
 
-Welcome to **Part V: Mojo Functional Patterns**! This section introduces you to Mojo's revolutionary approach to GPU programming through **functional patterns** that abstract away low-level complexity while delivering exceptional performance. You'll master the art of writing clean, efficient parallel code that scales across thousands of GPU threads.
+In this puzzle, you'll implement fused LayerNorm + Linear operations with both forward and backward passes. While both fused and unfused implementations produce identical results, they use different strategies that lead to significant performance differences.
 
-**What you'll achieve:** Transform from manual GPU kernel programming to high-level functional patterns that automatically handle vectorization, memory optimization, and performance tuning.
+You'll compare:
+- **Unfused approach**: Separate kernels for LayerNorm and Linear
+- **Fused kernel**: Combined operation in a single kernel
+- **Custom backward pass**: Gradient computation for fused operations
 
-**Key insight:** _Modern GPU programming doesn't require sacrificing elegance for performance - Mojo's functional patterns give you both._
+This comparison teaches the critical importance of kernel fusion and proper gradient computation in deep learning operations.
 
-## What you'll learn
+## Background: LayerNorm + Linear operations
 
-### 🧠 **GPU execution hierarchy**
-Understand the fundamental relationship between GPU threads and SIMD operations:
+LayerNorm and Linear are fundamental operations in transformer architectures, particularly in attention mechanisms and feed-forward networks. Here's how they're typically used:
 
-```
-GPU Device
-├── Grid (your entire problem)
-│   ├── Block 1 (group of threads, shared memory)
-│   │   ├── Warp 1 (32 threads, lockstep execution) --> We'll learn in Part VI
-│   │   │   ├── Thread 1 → SIMD
-│   │   │   ├── Thread 2 → SIMD
-│   │   │   └── ... (32 threads total)
-│   │   └── Warp 2 (32 threads)
-│   └── Block 2 (independent group)
-```
+```python
+import torch
+import torch.nn.functional as F
 
-**What Mojo abstracts for you:**
-- Grid/Block configuration automatically calculated
-- Warp management handled transparently
-- Thread scheduling optimized automatically
-- Memory hierarchy optimization built-in
+# Input: hidden states
+x = torch.randn(batch_size, seq_len, hidden_dim)
 
-💡 **Note**: While this Part focuses on functional patterns, **warp-level programming** and advanced GPU memory management will be covered in detail in **[Part VI](../puzzle_21/puzzle_21.md)**.
+# LayerNorm parameters
+ln_weight = torch.ones(hidden_dim)  # scale parameter (γ)
+ln_bias = torch.zeros(hidden_dim)   # shift parameter (β)
 
-### ⚡ **Four fundamental patterns**
-Master the complete spectrum of GPU functional programming:
+# Linear layer parameters
+linear_weight = torch.randn(output_dim, hidden_dim)
+linear_bias = torch.zeros(output_dim)
 
-1. **Elementwise**: Maximum parallelism with automatic SIMD vectorization
-2. **Tiled**: Memory-efficient processing with cache optimization
-3. **Manual vectorization**: Expert-level control over SIMD operations
-4. **Mojo vectorize**: Safe, automatic vectorization with bounds checking
+# Unfused operations (with autograd)
+ln_output = F.layer_norm(x, [hidden_dim], weight=ln_weight, bias=ln_bias)
+output = F.linear(ln_output, linear_weight, linear_bias)
 
-### 🎯 **Performance patterns you'll recognize**
-```
-Problem: Add two 1024-element vectors (SIZE=1024, SIMD_WIDTH=4)
-
-Elementwise:     256 threads × 1 SIMD op   = High parallelism
-Tiled:           32 threads  × 8 SIMD ops  = Cache optimization
-Manual:          8 threads   × 32 SIMD ops = Maximum control
-Mojo vectorize:  32 threads  × 8 SIMD ops  = Automatic safety
+# Fused operation (custom implementation)
+# This is what you'll implement in this puzzle
+output_fused = fused_layernorm_linear(x, ln_weight, ln_bias, linear_weight, linear_bias)
 ```
 
-### 📊 **Real performance insights**
-Learn to interpret empirical benchmark results:
-```
-Benchmark Results (SIZE=1,048,576):
-elementwise:        11.34ms  ← Maximum parallelism wins at scale
-tiled:              12.04ms  ← Good balance of locality and parallelism
-manual_vectorized:  15.75ms  ← Complex indexing hurts simple operations
-vectorized:         13.38ms  ← Automatic optimization overhead
-```
+When fused, these operations are combined into a single efficient kernel that:
+- Reduces memory bandwidth usage
+- Minimizes kernel launch overhead
+- Improves cache utilization
+- Eliminates intermediate allocations
 
-## Prerequisites
+In practice, this fusion can provide up to 1.5-2x speedup in both forward and backward passes, which is crucial for transformer training efficiency.
 
-Before diving into functional patterns, ensure you're comfortable with:
-- **Basic GPU concepts**: Memory hierarchy, thread execution, SIMD operations
-- **Mojo fundamentals**: Parameter functions, compile-time specialization, capturing semantics
-- **LayoutTensor operations**: Loading, storing, and tensor manipulation
-- **GPU memory management**: Buffer allocation, host-device synchronization
+### Why custom backward passes matter
+
+PyTorch's autograd system automatically computes gradients for individual operations, but fused operations require custom backward passes to:
+- Maintain numerical stability
+- Ensure proper gradient flow
+- Optimize memory access patterns
+- Handle atomic operations for gradient accumulation
 
 ## Learning path
 
-### 🔰 **1. Elementwise operations**
-**→ [Elementwise - Basic GPU Functional Operations](./elementwise.md)**
+This puzzle is structured in two parts to build your understanding systematically:
 
-Start with the foundation: automatic thread management and SIMD vectorization.
+### **[Forward pass implementation](./forward_pass.md)**
 
-**What you'll master:**
-- Functional GPU programming with `elementwise`
-- Automatic SIMD vectorization within GPU threads
-- LayoutTensor operations for safe memory access
-- Capturing semantics in nested functions
+Start here to implement the fused forward kernel and understand kernel fusion benefits.
 
-**Key pattern:**
-```mojo
-elementwise[add_function, SIMD_WIDTH, target="gpu"](total_size, ctx)
-```
+**What you'll do:**
+- Implement both unfused and fused forward kernels
+- Learn fundamental kernel fusion techniques
+- See the same operations implemented with different strategies
+- Understand performance implications of fusion
+- Master memory access patterns for optimal performance
 
-### ⚡ **2. Tiled processing**
-**→ [Tile - Memory-Efficient Tiled Processing](./tile.md)**
+### **[Backward pass implementation](./backward_pass.md)**
 
-Build on elementwise with memory-optimized tiling patterns.
+Deep dive into autograd integration and gradient computation.
 
-**What you'll master:**
-- Tile-based memory organization for cache optimization
-- Sequential SIMD processing within tiles
-- Memory locality principles and cache-friendly access patterns
-- Thread-to-tile mapping vs thread-to-element mapping
-
-**Key insight:** Tiling trades parallel breadth for memory locality - fewer threads each doing more work with better cache utilization.
-
-### 🔧 **3. Advanced vectorization**
-**→ [Vectorization - Fine-Grained SIMD Control](./vectorize.md)**
-
-Explore manual control and automatic vectorization strategies.
-
-**What you'll master:**
-- Manual SIMD operations with explicit index management
-- Mojo's vectorize function for safe, automatic vectorization
-- Chunk-based memory organization for optimal SIMD alignment
-- Performance trade-offs between manual control and safety
-
-**Two approaches:**
-- **Manual**: Direct control, maximum performance, complex indexing
-- **Mojo vectorize**: Automatic optimization, built-in safety, clean code
-
-### 🧠 **4. Threading vs SIMD concepts**
-**→ [GPU Threading vs SIMD - Understanding the Execution Hierarchy](./gpu-thread-vs-simd.md)**
-
-Understand the fundamental relationship between parallelism levels.
-
-**What you'll master:**
-- GPU threading hierarchy and hardware mapping
-- SIMD operations within GPU threads
-- Pattern comparison and thread-to-work mapping
-- Choosing the right pattern for different workloads
-
-**Key insight:** GPU threads provide the parallelism structure, while SIMD operations provide the vectorization within each thread.
-
-### 📊 **5. Performance benchmarking in Mojo**
-
-**→ [Benchmarking in Mojo](./benchmarking.md)**
-
-Learn to measure, analyze, and optimize GPU performance scientifically.
-
-**What you'll master:**
-- Mojo's built-in benchmarking framework
-- GPU-specific timing and synchronization challenges
-- Parameterized benchmark functions with compile-time specialization
-- Empirical performance analysis and pattern selection
-
-**Critical technique:** Using `keep()` to prevent compiler optimization of benchmarked code.
+**What you'll learn:**
+- How to implement custom backward passes
+- Why proper gradient flow is crucial
+- Real-world implications for training efficiency
+- Optimization strategies for backward operations
+- Mathematical foundations of gradient computation
+- Atomic operations for gradient accumulation
+- Numerical stability in backward passes
 
 ## Getting started
 
-Ready to transform your GPU programming skills? Start with the elementwise pattern and work through each section systematically. Each puzzle builds on the previous concepts while introducing new levels of sophistication.
+Ready to explore kernel fusion and autograd integration? Start with the **[Forward pass implementation](./forward_pass.md)** to implement the fused kernel, then move to **[Backward pass implementation](./backward_pass.md)** to understand gradient computation.
 
-💡 **Success tip**: Focus on understanding the **why** behind each pattern, not just the **how**. The conceptual framework you develop here will serve you throughout your GPU programming career.
+The puzzle includes a comprehensive testing framework that verifies:
+- Numerical correctness against PyTorch's implementation for both forward and backward passes
+- Performance comparison between our CPU and GPU implementations
+- Gradient computation accuracy for all parameters (input, LayerNorm weights/bias, Linear weights/bias)
+- Memory usage optimization through kernel fusion
 
-🎯 **Learning objective**: By the end of Part V, you'll think in terms of functional patterns rather than low-level GPU mechanics, enabling you to write more maintainable, performant, and portable GPU code.
-
-**Ready to begin?** Start with **[Elementwise Operations](./elementwise.md)** and discover the power of functional GPU programming!
+💡 **Success tip:** Pay attention to how the different implementations (fused vs unfused) affect both forward and backward pass performance - this insight applies to many deep learning operations beyond LayerNorm + Linear. The backward pass implementation is particularly important as it directly impacts training efficiency and numerical stability.

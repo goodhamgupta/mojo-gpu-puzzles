@@ -328,6 +328,7 @@ The implementation achieves **maximum memory efficiency** through:
 - **Steps 3 & 7**: Both leverage `matmul_idiomatic_tiled` from [Puzzle 14](../puzzle_14/puzzle_14.md)
   - Step 3: \\(Q \\times K^T\\) → attention scores computation \\((1,d) \\times (d,\\text{seq_len}) \\rightarrow (1,\\text{seq_len})\\)
   - Step 7: \\(\\text{weights} \\times V\\) → final weighted output \\((1,\\text{seq_len}) \\times (\\text{seq_len},d) \\rightarrow (1,d)\\)
+  - Both operations include bounds checking for robustness with variable matrix dimensions
 - **Step 5**: Employs `softmax_kernel` from [Puzzle 16](../puzzle_16/puzzle_16.md)
   - Converts raw scores into normalized probability distribution
   - Ensures numerical stability through max subtraction and parallel reduction

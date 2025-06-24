@@ -14,7 +14,6 @@ alias TPB = 128
 alias BLOCKS_PER_GRID = (1, 1)
 alias THREADS_PER_BLOCK = (TPB, 1)
 alias layout = Layout.row_major(SIZE)
-alias dtype = DType.float32
 
 
 fn softmax_gpu_kernel[
@@ -63,11 +62,11 @@ fn softmax_gpu_kernel[
     block_max = shared_max[0]
 
     # Step 2: Compute exponential values using the numerically stable formula
-    var exp_val: out.element_type = 0.0
+    var exp_val: output.element_type = 0.0
 
     if global_id < input_size:
         exp_val = rebind[Scalar[dtype]](exp(input[global_id] - block_max))
-        out[global_id] = exp_val
+        output[global_id] = exp_val
         # NOTE: Here, directly assigning the value to the output DOESN'T WORK
         # It gives only nan/inf values
         # out[global_id] = exp(input[global_id] - block_max)
@@ -87,7 +86,7 @@ fn softmax_gpu_kernel[
     block_sum = shared_sum[0]
 
     if global_id < input_size:
-        out[global_id] = out[global_id] / block_sum
+        output[global_id] = output[global_id] / block_sum
 
     # FILL IN (roughly 31 lines)
     ...
@@ -106,8 +105,8 @@ fn softmax_cpu_kernel[
     input: LayoutTensor[dtype, layout, MutableAnyOrigin],
 ):
     # Step 1: Find maximum element
-    var max_val: out.element_type = 0.0
-    var running_sum: out.element_type = 0.0
+    var max_val: output.element_type = 0.0
+    var running_sum: output.element_type = 0.0
 
     # NOTE: Couldn't see any noticeable improvement in the runnning time after adding the `parameter` decorator.
     # I should measure performance more accurately.
@@ -120,13 +119,13 @@ fn softmax_cpu_kernel[
     # Step 2: Find softmax
     @parameter
     for idx in range(input_size):
-        out[idx] = exp(input[idx] - max_val)
-        running_sum += out[idx]
+        output[idx] = exp(input[idx] - max_val)
+        running_sum += output[idx]
 
     # Step 3: Compute final values
     @parameter
     for idx in range(input_size):
-        out[idx] = out[idx] / running_sum
+        output[idx] = output[idx] / running_sum
 
     # FILL IN (roughly 10 lines)
     ...
@@ -147,8 +146,8 @@ struct SoftmaxCustomOp:
         input_size: Int,
         dtype: DType = DType.float32,
     ](
-        output: OutputTensor[dtype=dtype, rank=1],
-        input: InputTensor[dtype = output.dtype, rank = output.rank],
+        output: OutputTensor[rank=1],
+        input: InputTensor[rank = output.rank],
         ctx: DeviceContextPtr,
     ) raises:
         # Note: rebind is necessary now but it shouldn't be!
@@ -165,9 +164,9 @@ struct SoftmaxCustomOp:
             gpu_ctx = ctx.get_device_context()
             # making sure the output tensor is zeroed out before the kernel is called
             gpu_ctx.enqueue_memset(
-                DeviceBuffer[output.dtype](
+                DeviceBuffer[output_tensor.dtype](
                     gpu_ctx,
-                    rebind[UnsafePointer[Scalar[output.dtype]]](
+                    rebind[UnsafePointer[Scalar[output_tensor.dtype]]](
                         output_tensor.ptr
                     ),
                     input_size,

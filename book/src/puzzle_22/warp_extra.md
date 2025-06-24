@@ -1,4 +1,4 @@
-# 📊 When to Use Warp Programming
+# When to Use Warp Programming
 
 ## Quick decision guide
 
@@ -74,7 +74,7 @@ if input[global_i] > threshold:
 
 ```bash
 # Always benchmark both approaches
-mojo p21.mojo --benchmark
+mojo p22.mojo --benchmark
 
 # Look for scaling patterns:
 # traditional_1x:  X.XX ms

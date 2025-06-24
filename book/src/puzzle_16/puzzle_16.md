@@ -291,6 +291,20 @@ This implements a parallel tree-reduction pattern:
 
 This logarithmic reduction is significantly faster than a linear scan on large inputs.
 
+**Note**: This implementation has a potential race condition where threads simultaneously read from and write to shared memory during the same iteration. A safer approach would separate the read and write phases:
+```mojo
+stride = TPB // 2
+while stride > 0:
+    var temp_max: Scalar[dtype] = min_finite[dtype]()
+    if local_i < stride:
+        temp_max = rebind[Scalar[dtype]](shared_max[local_i + stride])  # Read phase
+    barrier()
+    if local_i < stride:
+        shared_max[local_i] = max(shared_max[local_i], temp_max)  # Write phase
+    barrier()
+    stride = stride // 2
+```
+
 #### Exponentiation with numerical stability
 ```mojo
 block_max = shared_max[0]
@@ -325,6 +339,20 @@ The second reduction phase:
 3. But performs addition instead of maximum comparison
 4. After \\(\log_2(TPB)\\) steps, `shared_sum[0]` contains the total sum of all exponentials
 
+**Note**: This sum reduction also has the same race condition as the max reduction. The safer implementation would be:
+```mojo
+stride = TPB // 2
+while stride > 0:
+    var temp_sum: Scalar[dtype] = 0.0
+    if local_i < stride:
+        temp_sum = shared_sum[local_i + stride]  # Read phase
+    barrier()
+    if local_i < stride:
+        shared_sum[local_i] += temp_sum  # Write phase
+    barrier()
+    stride = stride // 2
+```
+
 #### Final normalization
 ```mojo
 block_sum = shared_sum[0]
@@ -349,6 +377,8 @@ The implementation has excellent performance characteristics:
 - **Memory access**: Coalesced global memory access pattern for optimal bandwidth
 
 The algorithm is also numerically robust, handling potential overflow/underflow cases by applying the max-subtraction technique that maintains precision across the wide range of values common in neural network activations.
+
+**Race condition considerations**: Both parallel reductions in this implementation may have read-write hazards during shared memory access. While the current implementation may work in practice due to GPU memory consistency models, the safer approach would use explicit read-write phase separation as shown in the notes above.
 </div>
 
 ### CPU fallback implementation:
@@ -434,6 +464,7 @@ The Python integration creates a seamless bridge between NumPy arrays and our op
            )
        ],
        parameters={
+           "target": "gpu" if device == Accelerator() else "cpu",
            "input_size": input_tensor.shape[0],
            "dtype": dtype,
        },
@@ -443,7 +474,7 @@ The Python integration creates a seamless bridge between NumPy arrays and our op
    - Name matching the `@compiler.register("softmax")` in our Mojo code
    - Input values passed as a list
    - Output type definition matching the input shape and type
-   - Parameters required by our kernel, including the vector size and data type
+   - Parameters required by our kernel, including the target device, vector size and data type
    - We extract the tensor from the first returned element with `[0].tensor`
 
 3. **Graph Output Definition**:

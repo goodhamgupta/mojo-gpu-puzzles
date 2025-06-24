@@ -149,7 +149,7 @@ For our test case with `SIZE_2 = 15` and `TPB = 8`:
 Input array:  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 
 Block 0 processes: [0, 1, 2, 3, 4, 5, 6, 7]
-Block 1 processes: [8, 9, 10, 11, 12, 13, 14, (padding)]
+Block 1 processes: [8, 9, 10, 11, 12, 13, 14] (7 valid elements)
 ```
 
 We extend the output buffer to include space for block sums:
@@ -163,6 +163,15 @@ The size of this extended buffer is: `EXTENDED_SIZE = SIZE_2 + num_blocks = 15 +
 
 ## Phase 1 kernel: Local prefix sums
 
+### Race Condition Prevention in Local Phase
+
+The local phase uses the same explicit synchronization pattern as the simple version to prevent read-write hazards:
+- **Read Phase**: All threads first read the values they need into a local variable `current_val`
+- **Synchronization**: `barrier()` ensures all reads complete before any writes begin
+- **Write Phase**: All threads then safely write their computed values back to shared memory
+
+This prevents race conditions that could occur when multiple threads simultaneously access the same shared memory locations during the parallel reduction.
+
 ### Step-by-step execution for Block 0
 
 1. **Load values into shared memory**:
@@ -173,6 +182,18 @@ The size of this extended buffer is: `EXTENDED_SIZE = SIZE_2 + num_blocks = 15 +
 2. **Iterations of parallel reduction** (\\(\log_2(TPB) = 3\\) iterations):
 
    **Iteration 1** (offset=1):
+
+   **Read Phase**: Each active thread reads the value it needs:
+   ```
+   T₁ reads shared[0] = 0    T₅ reads shared[4] = 4
+   T₂ reads shared[1] = 1    T₆ reads shared[5] = 5
+   T₃ reads shared[2] = 2    T₇ reads shared[6] = 6
+   T₄ reads shared[3] = 3
+   ```
+
+   **Synchronization**: `barrier()` ensures all reads complete
+
+   **Write Phase**: Each thread adds its read value:
    ```
    shared[0] = 0              (unchanged)
    shared[1] = 1 + 0 = 1
@@ -186,6 +207,17 @@ The size of this extended buffer is: `EXTENDED_SIZE = SIZE_2 + num_blocks = 15 +
    After barrier: `shared = [0, 1, 3, 5, 7, 9, 11, 13]`
 
    **Iteration 2** (offset=2):
+
+   **Read Phase**: Each active thread reads the value it needs:
+   ```
+   T₂ reads shared[0] = 0    T₅ reads shared[3] = 5
+   T₃ reads shared[1] = 1    T₆ reads shared[4] = 7
+   T₄ reads shared[2] = 3    T₇ reads shared[5] = 9
+   ```
+
+   **Synchronization**: `barrier()` ensures all reads complete
+
+   **Write Phase**: Each thread adds its read value:
    ```
    shared[0] = 0              (unchanged)
    shared[1] = 1              (unchanged)
@@ -199,6 +231,16 @@ The size of this extended buffer is: `EXTENDED_SIZE = SIZE_2 + num_blocks = 15 +
    After barrier: `shared = [0, 1, 3, 6, 10, 14, 18, 22]`
 
    **Iteration 3** (offset=4):
+
+   **Read Phase**: Each active thread reads the value it needs:
+   ```
+   T₄ reads shared[0] = 0    T₆ reads shared[2] = 3
+   T₅ reads shared[1] = 1    T₇ reads shared[3] = 6
+   ```
+
+   **Synchronization**: `barrier()` ensures all reads complete
+
+   **Write Phase**: Each thread adds its read value:
    ```
    shared[0] = 0              (unchanged)
    shared[1] = 1              (unchanged)
@@ -225,41 +267,65 @@ The size of this extended buffer is: `EXTENDED_SIZE = SIZE_2 + num_blocks = 15 +
 
 1. **Load values into shared memory**:
    ```
-   shared = [8, 9, 10, 11, 12, 13, 14, 0] // Last value padded with 0
+   shared = [8, 9, 10, 11, 12, 13, 14, uninitialized]
    ```
+   Note: Thread 7 doesn't load anything since `global_i = 15 >= SIZE_2`, leaving `shared[7]` uninitialized. This is safe because Thread 7 won't participate in the final output.
 
 2. **Iterations of parallel reduction** (\\(\log_2(TPB) = 3\\) iterations):
 
-   With similar iterations as Block 0, after all three iterations:
+   Only the first 7 threads participate in meaningful computation. After all three iterations:
    ```
-   shared = [8, 17, 27, 38, 50, 63, 77, 77]
+   shared = [8, 17, 27, 38, 50, 63, 77, uninitialized]
    ```
 
 3. **Write local results back to global memory**:
    ```
-   output[8...14] = [8, 17, 27, 38, 50, 63, 77]
+   output[8...14] = [8, 17, 27, 38, 50, 63, 77]  // Only 7 valid outputs
    ```
 
-4. **Store block sum in auxiliary space** (only last thread):
+4. **Store block sum in auxiliary space** (only last thread in block):
    ```
-   output[16] = 77  // at position size + block_idx.x = 15 + 1
+   output[16] = shared[7]  // Thread 7 (TPB-1) stores whatever is in shared[7]
    ```
+   Note: Even though Thread 7 doesn't load valid input data, it still participates in the prefix sum computation within the block. The `shared[7]` position gets updated during the parallel reduction iterations, but since it started uninitialized, the final value is unpredictable. However, this doesn't affect correctness because Block 1 is the last block, so this block sum is never used in Phase 2.
 
 After Phase 1, the output buffer contains:
 ```
-[0, 1, 3, 6, 10, 15, 21, 28, 8, 17, 27, 38, 50, 63, 77, 28, 77]
+[0, 1, 3, 6, 10, 15, 21, 28, 8, 17, 27, 38, 50, 63, 77, 28, ???]
                                                         ^   ^
                                                 Block sums stored here
 ```
+Note: The last block sum (???) is unpredictable since it's based on uninitialized memory, but this doesn't affect the final result.
 
-## Host-side synchronization: The critical step
+## Host-device synchronization: When it's actually needed
 
-Between phases 1 and 2, we call:
+The two kernel phases execute sequentially **without any explicit synchronization** between them:
+
 ```mojo
-ctx.synchronize()
+# Phase 1: Local prefix sums
+ctx.enqueue_function[prefix_sum_local_phase[...]](...)
+
+# Phase 2: Add block sums (automatically waits for Phase 1)
+ctx.enqueue_function[prefix_sum_block_sum_phase[...]](...)
 ```
 
-This is the most crucial part of the algorithm! Without this synchronization, the second kernel might start before the first one completes, leading to race conditions and incorrect results. This is a fundamental difference from single-block algorithms where `barrier()` would be sufficient.
+**Key insight**: Mojo's `DeviceContext` uses a single execution stream (CUDA stream on NVIDIA GPUs, HIP stream on AMD ROCm GPUs), which guarantees that kernel launches execute in the exact order they are enqueued. No explicit synchronization is needed between kernels.
+
+**When `ctx.synchronize()` is needed**:
+
+```mojo
+# After both kernels complete, before reading results on host
+ctx.synchronize()  # Host waits for GPU to finish
+
+with out.map_to_host() as out_host:  # Now safe to read GPU results
+    print("out:", out_host)
+```
+
+The `ctx.synchronize()` call serves its traditional purpose:
+- **Host-device synchronization**: Ensures the host waits for all GPU work to complete before accessing results
+- **Memory safety**: Prevents reading GPU memory before computations finish
+
+**Execution model**: Unlike `barrier()` which synchronizes threads within a block, kernel ordering comes from Mojo's single-stream execution model, while `ctx.synchronize()` handles host-device coordination.
 
 ## Phase 2 kernel: Block sum addition
 
@@ -278,6 +344,21 @@ This is the most crucial part of the algorithm! Without this synchronization, th
    ```
 
 ## Performance and optimization considerations
+
+### Key implementation details
+
+**Local phase synchronization pattern**: Each iteration within a block follows a strict read → sync → write pattern:
+1. `var current_val: out.element_type = 0` - Initialize local variable
+2. `current_val = shared[local_i - offset]` - Read phase (if conditions met)
+3. `barrier()` - Explicit synchronization to prevent race conditions
+4. `shared[local_i] += current_val` - Write phase (if conditions met)
+5. `barrier()` - Standard synchronization before next iteration
+
+**Cross-block synchronization**: The algorithm uses two levels of synchronization:
+- **Intra-block**: `barrier()` synchronizes threads within each block during local prefix sum computation
+- **Inter-block**: `ctx.synchronize()` synchronizes between kernel launches to ensure Phase 1 completes before Phase 2 begins
+
+**Race condition prevention**: The explicit read-write separation in the local phase prevents the race condition that would occur if threads simultaneously read from and write to the same shared memory locations during parallel reduction.
 
 1. **Work efficiency**: This implementation has \\(O(n \log n)\\) work complexity, while the sequential algorithm is \\(O(n)\\). This is a classic space-time tradeoff in parallel algorithms.
 

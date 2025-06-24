@@ -24,7 +24,7 @@ fn prefix_sum_simple[
 ):
     global_i = block_dim.x * block_idx.x + thread_idx.x
     local_i = thread_idx.x
-    # FILL ME IN (roughly 12 lines)
+    # FILL ME IN (roughly 18 lines)
 
     shared = tb[dtype]().row_major[SIZE]().shared().alloc()
 
@@ -66,7 +66,7 @@ fn prefix_sum_simple[
         offset *= 2
 
     if global_i < SIZE:
-        out[global_i] = shared[local_i]
+        output[global_i] = shared[local_i]
 
 
 # ANCHOR_END: prefix_sum_simple
@@ -86,7 +86,6 @@ fn prefix_sum_local_phase[
     output: LayoutTensor[mut=False, dtype, out_layout],
     a: LayoutTensor[mut=False, dtype, in_layout],
     size: Int,
-    num_blocks: Int,
 ):
     print(block_dim.x, block_idx.x, thread_idx.x)
     global_i = block_dim.x * block_idx.x + thread_idx.x
@@ -107,10 +106,10 @@ fn prefix_sum_local_phase[
         offset *= 2
 
     if global_i < SIZE_2:
-        out[global_i] = shared[local_i]
+        output[global_i] = shared[local_i]
     
     if local_i == TPB - 1:
-        out[size + block_idx.x] += shared[local_i]
+        output[size + block_idx.x] += shared[local_i]
     # FILL ME IN (roughly 14 lines)
 
 
@@ -121,8 +120,8 @@ fn prefix_sum_block_sum_phase[
     global_i = block_dim.x * block_idx.x + thread_idx.x
     # FILL ME IN (roughly 3 lines)
     if block_idx.x > 0 and global_i < size:
-        prev_block_sum = out[SIZE_2 + block_idx.x - 1]
-        out[global_i] += prev_block_sum
+        prev_block_sum = output[SIZE_2 + block_idx.x - 1]
+        output[global_i] += prev_block_sum
 
 
 # ANCHOR_END: prefix_sum_complete
@@ -172,7 +171,6 @@ def main():
                 out_tensor,
                 a_tensor,
                 size,
-                num_blocks,
                 grid_dim=BLOCKS_PER_GRID_2,
                 block_dim=THREADS_PER_BLOCK_2,
             )

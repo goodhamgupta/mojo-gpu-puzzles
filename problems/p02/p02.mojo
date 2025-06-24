@@ -11,12 +11,12 @@ alias dtype = DType.float32
 
 
 fn add(
-    outout: UnsafePointer[Scalar[dtype]],
+    output: UnsafePointer[Scalar[dtype]],
     a: UnsafePointer[Scalar[dtype]],
     b: UnsafePointer[Scalar[dtype]],
 ):
     i = thread_idx.x
-    out[i] = a[i] + b[i]
+    output[i] = a[i] + b[i]
 
 
 # ANCHOR_END: add

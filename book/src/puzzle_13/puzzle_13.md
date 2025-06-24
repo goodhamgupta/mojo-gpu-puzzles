@@ -138,8 +138,22 @@ Input Matrix (4×6) with LayoutTensor:                Block Assignment:
    ```mojo
    stride = TPB // 2
    while stride > 0:
-       if local_i < size:
+       if local_i < stride:
            cache[local_i] += cache[local_i + stride]
+       barrier()
+       stride //= 2
+   ```
+
+   **Note**: This implementation has a potential race condition where threads simultaneously read from and write to shared memory during the same iteration. A safer approach would separate the read and write phases:
+   ```mojo
+   stride = TPB // 2
+   while stride > 0:
+       var temp_val: output.element_type = 0
+       if local_i < stride:
+           temp_val = cache[local_i + stride]  # Read phase
+       barrier()
+       if local_i < stride:
+           cache[local_i] += temp_val  # Write phase
        barrier()
        stride //= 2
    ```
@@ -166,6 +180,7 @@ Input Matrix (4×6) with LayoutTensor:                Block Assignment:
    - Minimal barriers (only during reduction)
    - Independent processing between rows
    - No inter-block communication needed
+   - **Race condition consideration**: The current implementation may have read-write hazards during parallel reduction that could be resolved with explicit read-write phase separation
 
 ### Complexity Analysis:
 - Time: \\(O(\log n)\\) per row, where n is row length

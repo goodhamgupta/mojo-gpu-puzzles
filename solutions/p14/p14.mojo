@@ -72,8 +72,8 @@ fn single_block_matmul[
 # ANCHOR_END: single_block_matmul_solution
 
 
-alias SIZE_TILED = 8
-alias BLOCKS_PER_GRID_TILED = (3, 3)  # each block convers 3x3 elements
+alias SIZE_TILED = 9
+alias BLOCKS_PER_GRID_TILED = (3, 3)  # each block covers 3x3 elements
 alias THREADS_PER_BLOCK_TILED = (TPB, TPB)
 alias layout_tiled = Layout.row_major(SIZE_TILED, SIZE_TILED)
 
@@ -86,10 +86,10 @@ fn matmul_tiled[
     a: LayoutTensor[mut=False, dtype, layout],
     b: LayoutTensor[mut=False, dtype, layout],
 ):
-    tiled_col = block_idx.x * TPB + thread_idx.x
-    tiled_row = block_idx.y * TPB + thread_idx.y
-    local_col = thread_idx.x
     local_row = thread_idx.y
+    local_col = thread_idx.x
+    tiled_row = block_idx.y * TPB + local_row
+    tiled_col = block_idx.x * TPB + local_col
 
     a_shared = tb[dtype]().row_major[TPB, TPB]().shared().alloc()
     b_shared = tb[dtype]().row_major[TPB, TPB]().shared().alloc()
@@ -148,38 +148,44 @@ fn matmul_idiomatic_tiled[
     a: LayoutTensor[mut=False, dtype, layout],
     b: LayoutTensor[mut=False, dtype, layout],
 ):
-    # Get the tile of the output matrix `out` that this thread block is responsible for
-    out_tile = output.tile[TPB, TPB](block_idx.y, block_idx.x)
-    a_shared = tb[dtype]().row_major[TPB, TPB]().shared().alloc()
-    b_shared = tb[dtype]().row_major[TPB, TPB]().shared().alloc()
     local_row = thread_idx.y
     local_col = thread_idx.x
+    tiled_row = block_idx.y * TPB + local_row
+    tiled_col = block_idx.x * TPB + local_col
+
+    # Get the tile of the output matrix that this thread block is responsible for
+    out_tile = output.tile[TPB, TPB](block_idx.y, block_idx.x)
+    a_shared = tb[dtype]().row_major[TPB, TPB]().shared().alloc().fill(0)
+    b_shared = tb[dtype]().row_major[TPB, TPB]().shared().alloc().fill(0)
 
     var acc: output.element_type = 0
 
     alias load_a_layout = Layout.row_major(1, TPB)
     alias load_b_layout = Layout.row_major(TPB, 1)
-    for idx in range((size + TPB - 1) // TPB):
+
+    @parameter
+    for idx in range(size // TPB):  # Perfect division: 9 // 3 = 3 tiles
+        # Get tiles from A and B matrices
         a_tile = a.tile[TPB, TPB](block_idx.y, idx)
         b_tile = b.tile[TPB, TPB](idx, block_idx.x)
 
+        # Asynchronously copy tiles to shared memory
         copy_dram_to_sram_async[thread_layout=load_a_layout](a_shared, a_tile)
         copy_dram_to_sram_async[thread_layout=load_b_layout](b_shared, b_tile)
 
+        # Wait for all async copies to complete
         async_copy_wait_all()
-
         barrier()
 
+        # Compute partial matrix multiplication for this tile
         @parameter
         for k in range(TPB):
             acc += a_shared[local_row, k] * b_shared[k, local_col]
 
         barrier()
 
-    if (
-        block_idx.y * TPB + local_row < size
-        and block_idx.x * TPB + local_col < size
-    ):
+    # Write final result to output tile
+    if tiled_row < size and tiled_col < size:
         out_tile[local_row, local_col] = acc
 
 

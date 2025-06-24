@@ -110,7 +110,7 @@ fn conv_1d_block_boundary[
 
         @parameter
         for j in range(CONV_2):
-            if local_i + j < TPB + CONV_2 - 1:
+            if global_i + j < SIZE_2:
                 local_sum += shared_a[local_i + j] * shared_b[j]
 
         output[global_i] = local_sum
@@ -190,6 +190,4 @@ def main():
             print("out:", out_host)
             print("expected:", expected)
             for i in range(size):
-                for j in range(conv):
-                    if i + j < size:
-                        assert_equal(out_host[i], expected[i])
+                assert_equal(out_host[i], expected[i])

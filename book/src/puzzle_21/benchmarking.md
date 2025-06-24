@@ -2,7 +2,7 @@
 
 ## Overview
 
-After mastering **elementwise**, **tiled**, **manual vectorization**, and **Mojo vectorize** patterns, it's time to measure their actual performance. This guide explains how to use the built-in benchmarking system in `p20.mojo` to scientifically compare these approaches and understand their performance characteristics.
+After mastering **elementwise**, **tiled**, **manual vectorization**, and **Mojo vectorize** patterns, it's time to measure their actual performance. This guide explains how to use the built-in benchmarking system in `p21.mojo` to scientifically compare these approaches and understand their performance characteristics.
 
 > **Key insight:** _Theoretical analysis is valuable, but empirical benchmarking reveals the true performance story on your specific hardware._
 
@@ -18,14 +18,14 @@ To execute the comprehensive benchmark suite:
   <div class="tab-content">
 
 ```bash
-uv run poe p20 --benchmark
+uv run poe p21 --benchmark
 ```
 
   </div>
   <div class="tab-content">
 
 ```bash
-pixi run p20 --benchmark
+pixi run p21 --benchmark
 ```
 
   </div>
@@ -36,7 +36,7 @@ Your output will show performance measurements for each pattern:
 ```txt
 SIZE: 1024
 simd_width: 4
-Running P20 GPU Benchmarks...
+Running p21 GPU Benchmarks...
 SIMD width: 4
 --------------------------------------------------------------------------------
 Testing SIZE=16, TILE=4

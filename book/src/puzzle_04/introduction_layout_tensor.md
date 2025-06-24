@@ -34,7 +34,6 @@ if row < height and col < width:
 LayoutTensor will help us tackle these challenges with elegant solutions. Here's a glimpse of what's coming:
 
 1. **Natural Indexing**: Use `tensor[i, j]` instead of manual offset calculations
-2. **Automatic Bounds Checking**: Built-in protection against out-of-bounds access
 3. **Flexible Memory Layouts**: Support for row-major, column-major, and tiled organizations
 4. **Performance Optimization**: Efficient memory access patterns for GPU
 
@@ -195,7 +194,6 @@ Let's break down what's happening:
 This simple example demonstrates key LayoutTensor benefits:
 - Clean syntax for tensor creation and access
 - Automatic memory layout handling
-- Built-in bounds checking
 - Natural multi-dimensional indexing
 
 While this example is straightforward, the same patterns will scale to complex GPU operations in upcoming puzzles. You'll see how these basic concepts extend to:

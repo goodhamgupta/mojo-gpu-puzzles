@@ -29,7 +29,7 @@ fn naive_matmul[
     col = block_dim.x * block_idx.x + thread_idx.x
 
     if row < SIZE and col < SIZE:
-        var running_sum: out.element_type = 0
+        var running_sum: output.element_type = 0
 
         @parameter
         for k in range(SIZE):
@@ -40,7 +40,7 @@ fn naive_matmul[
             # I ran into more type errors.
             # FIX: Use out.element_type instead of dtype for the variable
             running_sum += a[row, k] * b[k, col]
-        out[row, col] = running_sum
+        output[row, col] = running_sum
 
 
 # ANCHOR_END: naive_matmul
@@ -66,20 +66,20 @@ fn single_block_matmul[
 
     barrier()
     if row < size and col < size and local_row < size and local_col < size:
-        var running_sum: out.element_type = 0.0
+        var running_sum: output.element_type = 0.0
 
         @parameter
         for k in range(size):
             running_sum += a[local_row, k] * b[k, local_col]
 
-        out[row, col] = running_sum
+        output[row, col] = running_sum
     # FILL ME IN (roughly 12 lines)
 
 
 # ANCHOR_END: single_block_matmul
 
 # ANCHOR: matmul_tiled
-alias SIZE_TILED = 8
+alias SIZE_TILED = 9
 alias BLOCKS_PER_GRID_TILED = (3, 3)  # each block convers 3x3 elements
 alias THREADS_PER_BLOCK_TILED = (TPB, TPB)
 alias layout_tiled = Layout.row_major(SIZE_TILED, SIZE_TILED)
@@ -93,13 +93,13 @@ fn matmul_tiled[
     b: LayoutTensor[mut=False, dtype, layout],
 ):
     # LayoutTensor APIs
-    out_tile = out.tile[TPB, TPB](block_idx.y, block_idx.x)
+    out_tile = output.tile[TPB, TPB](block_idx.y, block_idx.x)
     a_shared = tb[dtype]().row_major[TPB, TPB]().shared().alloc()
     b_shared = tb[dtype]().row_major[TPB, TPB]().shared().alloc()
     local_row = thread_idx.y
     local_col = thread_idx.x
 
-    var acc: out.element_type = 0.0
+    var acc: output.element_type = 0.0
 
     alias load_a_layout = Layout.row_major(1, TPB)
     alias load_b_layout = Layout.row_major(TPB, 1)
@@ -166,8 +166,6 @@ fn matmul_tiled[
 
     # if tiled_row < SIZE_TILED and tiled_col < SIZE_TILED:
     #     out[tiled_row, tiled_col] = acc
-
-    # FILL ME IN (roughly 20 lines)
 
 
 # ANCHOR_END: matmul_tiled
