@@ -113,9 +113,12 @@ The roofline model not only diagnoses current performance but also illuminates o
 | **Register blocking**           | Reduce memory traffic with register accumulation             | Loop unrolling with register variables                         |
 | **Kernel fusion**              | More FLOPs per byte by combining operations                   | Single kernel handling multiple computation stages             |
 | **Memory coalescing**          | Maximize effective bandwidth utilization                      | Structured access patterns, proper thread organization         |
+| **Asynchronous memory copies** | Dedicated copy engine enables compute-memory overlap          | `copy_dram_to_sram_async` with computation overlap            |
 | **Mixed precision**            | Smaller data types reduce memory pressure                     | FP16/BF16 input with FP32 accumulation                        |
 
 Each technique moves kernels along the roofline—either up the memory roof (better bandwidth utilization) or rightward toward the compute roof (higher arithmetic intensity).
+
+**Note on asynchronous operations**: Standard GPU memory loads (`ld.global`) are already asynchronous - warps continue executing until they need the loaded data. Specialized async copy instructions like `cp.async` (CUDA) or [copy_dram_to_sram_async](https://docs.modular.com/mojo/kernels/layout/layout_tensor/copy_dram_to_sram_async/) (Mojo) provide additional benefits by using dedicated copy engines, bypassing registers, and enabling better resource utilization rather than simply making synchronous operations asynchronous.
 
 ## 7. Beyond simple rooflines
 

@@ -24,7 +24,7 @@ pytorch-triton-rocm = {version = "*", index = "https://download.pytorch.org/whl/
 
 [dependencies]
 python = ">=3.10,<3.13"
-max = "*"
+max = "==25.5.0.dev2025062619"
 bash = ">=5.2.21,<6"
 manim = ">=0.18.1,<0.19"
 mdbook = ">=0.4.48,<0.5"

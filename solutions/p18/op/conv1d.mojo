@@ -74,9 +74,9 @@ struct Conv1DCustomOp:
         conv_size: Int,
         dtype: DType = DType.float32,
     ](
-        output: OutputTensor[rank=1],
-        input: InputTensor[dtype = output.dtype, rank = output.rank],
-        kernel: InputTensor[dtype = output.dtype, rank = output.rank],
+        output: OutputTensor[dtype=dtype, rank=1],
+        input: InputTensor[dtype=dtype, rank = output.rank],
+        kernel: InputTensor[dtype=dtype, rank = output.rank],
         # the context is needed for some GPU calls
         ctx: DeviceContextPtr,
     ) raises:

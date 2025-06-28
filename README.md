@@ -115,12 +115,19 @@ pixi run book
 
 # Test solutions on GPU
 pixi run tests
+# Or a specific puzzle
+pixi run tests pXX
+# Or manually
+pixi run mojo/python solutions/pXX/pXX.{mojo,py}
 
 # Run GPU sanitizers for debugging on NVIDIA GPUs using `compute-sanitizer`
 pixi run memcheck     # Detect memory errors
 pixi run racecheck    # Detect race conditions
 pixi run synccheck    # Detect synchronization errors
 pixi run initcheck    # Detect uninitialized memory access
+# Or manually
+# Note: ignore the mojo runtime error collision with the sanitizer. Look for `Error SUMMARY`
+pixi run compute-sanitizer --tool {memcheck,racecheck,synccheck,initcheck} mojo solutions/pXX/pXX.mojo
 
 # Format code
 pixi run format

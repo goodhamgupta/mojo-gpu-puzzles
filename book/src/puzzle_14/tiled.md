@@ -41,7 +41,6 @@ Each block processes a tile using LayoutTensor indexing
 1. Calculate global and local indices for thread position
 2. Allocate shared memory for A and B tiles
 3. For each tile:
-   - Reset shared memory
    - Load tile from matrix A and B
    - Compute partial products
    - Accumulate results in registers
@@ -179,25 +178,9 @@ expected: HostBuffer([3672.0, 3744.0, 3816.0, 3888.0, 3960.0, 4032.0, 4104.0, 41
 
 The tiled matrix multiplication implementation demonstrates efficient handling of matrices \\((9 \times 9)\\) using small tiles \\((3 \times 3)\\). Here's how it works:
 
-1. **Thread indexing setup**
-   - The problem template provides the standard indexing convention:
-     ```mojo
-     local_row = thread_idx.y  # y for row
-     local_col = thread_idx.x  # x for col
-     global_row = block_idx.y * TPB + local_row
-     global_col = block_idx.x * TPB + local_col
-     ```
-   - The solution uses the same consistent indexing:
-     ```mojo
-     tiled_row = block_idx.y * TPB + thread_idx.y  # y for row
-     tiled_col = block_idx.x * TPB + thread_idx.x  # x for col
-     local_row = thread_idx.y  # y for row
-     local_col = thread_idx.x  # x for col
-     ```
-
-2. **Shared memory allocation**
+1. **Shared memory allocation**
    ```txt
-   Input matrices (9×9) - Perfect fit for 3×3 tiling:
+   Input matrices (9×9) - Perfect fit for (3×3) tiling:
    A = [0  1  2  3  4  5  6  7  8 ]    B = [0  2  4  6  8  10 12 14 16]
        [9  10 11 12 13 14 15 16 17]        [18 20 22 24 26 28 30 32 34]
        [18 19 20 21 22 23 24 25 26]        [36 38 40 42 44 46 48 50 52]
@@ -212,63 +195,71 @@ The tiled matrix multiplication implementation demonstrates efficient handling o
    a_shared[TPB, TPB]  b_shared[TPB, TPB]
    ```
 
-3. **Tile processing loop**
+2. **Tile processing loop**
    ```txt
    Number of tiles = 9 // 3 = 3 tiles (perfect division!)
 
    For each tile:
-   1. Shared memory already initialized with .fill(0)
-   2. Load tile from A and B (no bounds checking needed!)
-   3. Compute partial products
-   4. Accumulate in register
+   1. Load tile from A and B
+   2. Compute partial products
+   3. Accumulate in register
    ```
 
-4. **Memory loading pattern**
-   - With perfect 9×9 tiling, no bounds checking needed:
-     ```txt
-     a_shared[local_row, local_col] = a[tiled_row, tile * TPB + local_col]
-     b_shared[local_row, local_col] = b[tile * TPB + local_row, tiled_col]
+3. **Memory loading pattern**
+   - With perfect \\((9 \times 9)\\) tiling, bounds check is technically unnecessary but included for defensive programming and consistency with other matrix sizes.
+     ```mojo
+        # Load A tile - global row stays the same, col determined by tile
+        if tiled_row < size and (tile * TPB + local_col) < size:
+            a_shared[local_row, local_col] = a[
+                tiled_row, tile * TPB + local_col
+            ]
+
+        # Load B tile - row determined by tile, global col stays the same
+        if (tile * TPB + local_row) < size and tiled_col < size:
+            b_shared[local_row, local_col] = b[
+                tile * TPB + local_row, tiled_col
+            ]
      ```
 
-5. **Computation within tile**
-   ```txt
-   For k in range(TPB):  # No need for min() - all tiles are full!
+4. **Computation within tile**
+   ```mojo
+   for k in range(min(TPB, size - tile * TPB)):
        acc += a_shared[local_row, k] * b_shared[k, local_col]
    ```
-   - Maximizes memory coalescing:
+   - Avoids shared memory bank conflicts:
      ```txt
-     Coalesced Access (Good):          Non-Coalesced Access (Bad):
-     Thread0: [M0][M1][M2][M3]         Thread0: [M0][ ][ ][ ]
-     Thread1: [M4][M5][M6][M7]    vs   Thread1: [ ][M1][ ][ ]
-     Thread2: [M8][M9][MA][MB]         Thread2: [ ][ ][M2][ ]
-     Thread3: [MC][MD][ME][MF]         Thread3: [ ][ ][ ][M3]
-     ↓                                 ↓
-     1 memory transaction              4 memory transactions
+     Bank Conflict Free (Good):        Bank Conflicts (Bad):
+     Thread0: a_shared[0,k] b_shared[k,0]  Thread0: a_shared[k,0] b_shared[0,k]
+     Thread1: a_shared[0,k] b_shared[k,1]  Thread1: a_shared[k,0] b_shared[1,k]
+     Thread2: a_shared[0,k] b_shared[k,2]  Thread2: a_shared[k,0] b_shared[2,k]
+     ↓                                     ↓
+     Parallel access to different banks    Serialized access to same bank of b_shared
+     (or broadcast for a_shared)           if shared memory was col_major (transposed)
      ```
-     When threads access consecutive memory locations (left), the GPU can combine multiple reads into a single transaction.
-     When threads access scattered locations (right), each access requires a separate transaction, reducing performance.
+     Left: When threads from the same warp access different banks of shared memory during the same memory transaction (`b_shared[k,threadIdx.x]`), or all threads in a warp access the same shared memory address (`a_shared[0,k]`), accesses can proceed in parallel.
+     Right: When threads from the same warp access the same bank simultaneously (bank `k` in `b_shared`), accesses are serialized, reducing performance.
+     Note: Shared memory has 32 banks (on modern GPUs). Bank conflicts occur when multiple threads in a warp access different addresses in the same bank simultaneously. Broadcasts (same address) are handled efficiently.
 
 
-6. **Synchronization points**
+5. **Synchronization points**
    ```txt
    barrier() after:
-   1. Shared memory reset
-   2. Tile loading
-   3. Tile computation
+   1. Tile loading
+   2. Tile computation
    ```
 
 Key performance features:
-- Processes 9×9 matrix using 3×3 tiles (perfect fit!)
+- Processes \\((9 \times 9)\\) matrix using \\((3 \times 3)\\) tiles (perfect fit!)
 - Uses shared memory for fast tile access
-- Minimizes global memory transactions
-- No boundary checking needed - all tiles are full
-- Maintains coalesced memory access
+- Minimizes global memory transactions with coalesced memory access
+- Optimized shared memory layout and access pattern to avoid shared memory bank conflicts
 
-7. **Result writing**:
+6. **Result writing**:
    ```mojo
-   output[tiled_row, tiled_col] = acc
+   if tiled_row < size and tiled_col < size:
+      output[tiled_row, tiled_col] = acc
    ```
-   - With perfect 9×9 tiling, no bounds checking needed
+   - Defensive bounds checking included for other matrix sizes and tiling strategies
    - Direct assignment to output matrix
    - All threads write valid results
 
@@ -305,7 +296,7 @@ This implementation achieves high performance through:
 
 <div class="solution-explanation">
 
-The idiomatic tiled matrix multiplication leverages Mojo's LayoutTensor API and asynchronous memory operations for a beautifully clean implementation. With the 9×9 matrix size, we get perfect tiling that eliminates all boundary checks:
+The idiomatic tiled matrix multiplication leverages Mojo's LayoutTensor API and asynchronous memory operations for a beautifully clean implementation. With the \\((9 \times 9)\\) matrix size, we get perfect tiling that eliminates all boundary checks:
 
 1. **LayoutTensor tile API**
    ```mojo
@@ -322,9 +313,10 @@ The idiomatic tiled matrix multiplication leverages Mojo's LayoutTensor API and 
    async_copy_wait_all()
    ```
    These operations:
-   - Launch asynchronous memory transfers that may overlap with computation via [copy_dram_to_sram_async](https://docs.modular.com/mojo/kernels/layout/layout_tensor/copy_dram_to_sram_async/)
+   - Use dedicated copy engines that bypass registers and enable compute-memory overlap via [copy_dram_to_sram_async](https://docs.modular.com/mojo/kernels/layout/layout_tensor/copy_dram_to_sram_async/)
    - Use specialized thread layouts for optimal memory access patterns
    - Eliminate the need for manual memory initialization
+   - Note: Standard GPU loads are already asynchronous; these provide better resource utilization
 
 3. **Specialized compile-time load layouts**
    ```mojo
@@ -340,7 +332,7 @@ The idiomatic tiled matrix multiplication leverages Mojo's LayoutTensor API and 
    @parameter
    for idx in range(size // TPB):  # Perfect division: 9 // 3 = 3
    ```
-   With 9×9 matrices and 3×3 tiles, every tile is exactly full-sized. No boundary checking needed!
+   With \\((9 \times 9)\\) matrices and \\((3 \times 3)\\) tiles, every tile is exactly full-sized. No boundary checking needed!
 
 5. **Clean tile processing with defensive bounds checking**
    ```mojo
@@ -348,7 +340,7 @@ The idiomatic tiled matrix multiplication leverages Mojo's LayoutTensor API and 
    if tiled_row < size and tiled_col < size:
        out_tile[local_row, local_col] = acc
    ```
-   With perfect 9×9 tiling, this bounds check is technically unnecessary but included for defensive programming and consistency with other matrix sizes.
+   With perfect \\((9 \times 9)\\) tiling, this bounds check is technically unnecessary but included for defensive programming and consistency with other matrix sizes.
 
 ### Performance considerations
 
@@ -367,7 +359,7 @@ This implementation shows how high-level abstractions can express complex GPU al
 | Feature | Manual Tiling | Idiomatic Tiling |
 |---------|--------------|------------------|
 | Memory access | Direct indexing with bounds checks | LayoutTensor tile API |
-| Tile loading | Explicit element-by-element copying | Asynchronous bulk transfers |
+| Tile loading | Explicit element-by-element copying | Dedicated copy engine bulk transfers |
 | Shared memory | Manual initialization (zeroing) | Managed by copy functions |
 | Code complexity | More verbose with explicit indexing | More concise with higher-level APIs |
 | Bounds checking | Multiple checks during loading and computing | Single defensive check at final write |

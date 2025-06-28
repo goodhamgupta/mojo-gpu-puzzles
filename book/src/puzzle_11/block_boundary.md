@@ -112,13 +112,13 @@ Size calculation:
 2. **Data Loading Strategy**:
    ```mojo
    # Main block data
-   if global_i < a_size:
+   if global_i < SIZE_2:
        shared_a[local_i] = a[global_i]
 
    # Boundary data from next block
    if local_i < CONV_2 - 1:
        next_idx = global_i + TPB
-       if next_idx < a_size:
+       if next_idx < SIZE_2:
            shared_a[TPB + local_i] = a[next_idx]
        else:
            # Initialize out-of-bounds elements to 0 to avoid reading from uninitialized memory
@@ -140,7 +140,7 @@ Size calculation:
 
 4. **Convolution Computation**:
    ```mojo
-   if global_i < a_size:
+   if global_i < SIZE_2:
        var local_sum: output.element_type = 0
        @parameter
        for j in range(CONV_2):

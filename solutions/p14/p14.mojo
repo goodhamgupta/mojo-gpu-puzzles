@@ -99,13 +99,6 @@ fn matmul_tiled[
     # Iterate over tiles to compute matrix product
     @parameter
     for tile in range((size + TPB - 1) // TPB):
-        # Reset shared memory tiles
-        if local_row < TPB and local_col < TPB:
-            a_shared[local_row, local_col] = 0
-            b_shared[local_row, local_col] = 0
-
-        barrier()
-
         # Load A tile - global row stays the same, col determined by tile
         if tiled_row < size and (tile * TPB + local_col) < size:
             a_shared[local_row, local_col] = a[

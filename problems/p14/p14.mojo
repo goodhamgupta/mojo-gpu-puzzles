@@ -126,7 +126,7 @@ fn matmul_tiled[
         ):
             out_tile[local_row, local_col] = acc
 
-    # Manual memory management
+    # Manual memory management implementation
     # local_row = thread_idx.y
     # local_col = thread_idx.x
     # tiled_row = block_idx.y * TPB + local_row

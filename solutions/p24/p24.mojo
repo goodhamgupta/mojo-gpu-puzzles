@@ -494,7 +494,7 @@ def test_warp_partition():
 
 def main():
     print("WARP_SIZE: ", WARP_SIZE)
-    if len(argv()) < 2:
+    if len(argv()) != 2:
         print(
             "Usage: p24.mojo"
             " [--pair-swap|--parallel-max|--conditional-max|--prefix-sum|--partition]"

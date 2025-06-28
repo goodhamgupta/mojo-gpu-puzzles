@@ -489,7 +489,7 @@ def test_conditional_broadcast():
 
 def main():
     print("WARP_SIZE: ", WARP_SIZE)
-    if len(argv()) < 1 or len(argv()) > 2:
+    if len(argv()) != 2:
         print(
             "Usage: p23.mojo"
             " [--neighbor|--average|--broadcast-basic|--broadcast-conditional|--broadcast-shuffle-coordination]"

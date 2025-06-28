@@ -100,7 +100,7 @@ fn transpose_kernel[
 
 
 # Apply softmax to attention scores taken from p16
-fn softmax_kernel[
+fn softmax_gpu_kernel[
     layout: Layout,
     seq_len: Int,
     dtype: DType = DType.float32,

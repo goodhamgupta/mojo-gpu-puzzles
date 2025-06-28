@@ -41,7 +41,7 @@ Notes:
 2. Load input to `shared_a[local_i]` and kernel to `shared_b[local_i]`
 3. Call `barrier()` after loading
 4. Sum products within bounds: `if local_i + j < SIZE`
-5. Write result if `global_i < a_size`
+5. Write result if `global_i < SIZE`
 </div>
 </details>
 
@@ -115,25 +115,36 @@ Kernel b:        [0  1  2]
 
 ### Implementation Details
 
-1. **Memory Safety Considerations**:
-   - The naive approach without proper bounds checking could be unsafe:
+1. **Thread Participation and Efficiency Considerations**:
+   - The inefficient approach without proper thread guard:
      ```mojo
-     # Unsafe version - could access shared_a beyond its bounds
+     # Inefficient version - all threads compute even when results won't be used
      local_sum = Scalar[dtype](0)
      for j in range(CONV):
          if local_i + j < SIZE:
              local_sum += shared_a[local_i + j] * shared_b[j]
+     # Only guard the final write
+     if global_i < SIZE:
+         output[global_i] = local_sum
      ```
 
-   - The safe and correct implementation:
+   - The efficient and correct implementation:
      ```mojo
-     if global_i < a_size:
+     if global_i < SIZE:
          var local_sum: output.element_type = 0  # Using var allows type inference
          @parameter  # Unrolls loop at compile time since CONV is constant
          for j in range(CONV):
              if local_i + j < SIZE:
                  local_sum += shared_a[local_i + j] * shared_b[j]
+         output[global_i] = local_sum
      ```
+
+   The key difference is that the inefficient version has **all threads perform the convolution computation** (including those where `global_i >= SIZE`), and only the final write is guarded. This leads to:
+   - **Wasteful computation**: Threads beyond the valid range still perform unnecessary work
+   - **Reduced efficiency**: Extra computations that won't be used
+   - **Poor resource utilization**: GPU cores working on meaningless calculations
+
+   The efficient version ensures that only threads with valid `global_i` values perform any computation, making better use of GPU resources.
 
 2. **Key Implementation Features**:
    - Uses `var` for proper type inference with `output.element_type`
