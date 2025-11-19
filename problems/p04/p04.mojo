@@ -17,7 +17,10 @@ fn add_10_2d(
 ):
     row = thread_idx.y
     col = thread_idx.x
-    # FILL ME IN (roughly 2 lines)
+    ir = Int(row)
+    ic = Int(col)
+    if ir < size and ic < size:
+        output[ir * size + ic] = a[ir * size + ic] + 10
 
 
 # ANCHOR_END: add_10_2d

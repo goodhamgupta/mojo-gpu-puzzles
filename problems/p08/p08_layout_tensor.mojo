@@ -32,12 +32,14 @@ fn add_10_shared_layout_tensor[
     global_i = block_dim.x * block_idx.x + thread_idx.x
     local_i = thread_idx.x
 
-    if global_i < size:
+    if Int(global_i) < size:
         shared[local_i] = a[global_i]
 
     barrier()
 
     # FILL ME IN (roughly 2 lines)
+    if Int(local_i) < size:
+        output[global_i] = shared[local_i] + 10.0
 
 
 # ANCHOR_END: add_10_shared_layout_tensor

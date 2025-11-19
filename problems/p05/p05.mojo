@@ -18,6 +18,10 @@ fn broadcast_add(
 ):
     row = thread_idx.y
     col = thread_idx.x
+    ir = Int(row)
+    ic = Int(col)
+    if ir < size and ic < size:
+        output[ir * size + ic] = a[ic] + b[ir]
     # FILL ME IN (roughly 2 lines)
 
 
