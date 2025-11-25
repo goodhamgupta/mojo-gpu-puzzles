@@ -12,7 +12,7 @@ alias BLOCKS_PER_GRID = 1
 alias THREADS_PER_BLOCK = SIZE
 alias dtype = DType.float32
 alias vector_layout = Layout.row_major(SIZE)
-alias ITER = 2
+alias ITER = 3
 
 
 # ANCHOR: first_crash
@@ -21,7 +21,8 @@ fn add_10(
     a: UnsafePointer[Scalar[dtype], MutAnyOrigin],
 ):
     i = thread_idx.x
-    output[i] = a[i] + 10.0
+    if Int(i) < SIZE:
+        output[i] = a[i] + 10.0
 
 
 # ANCHOR_END: first_crash
@@ -39,7 +40,7 @@ fn process_sliding_window(
 
     # Sum elements in sliding window: [i-1, i, i+1]
     for offset in range(ITER):
-        idx = thread_id + offset - 1
+        idx = Int(thread_id) + Int(offset) - 1
         if 0 <= idx < SIZE:
             value = rebind[Scalar[dtype]](a[idx])
             window_sum += value
@@ -75,8 +76,6 @@ fn collaborative_filter(
         # Apply collaborative filter with neighbors
         if thread_id > 0:
             shared_workspace[thread_id] += shared_workspace[thread_id - 1] * 0.5
-        barrier()
-
     # Phase 3: Final synchronization and output
     barrier()
 
@@ -106,7 +105,7 @@ def main():
         print()
 
         with DeviceContext() as ctx:
-            input_buf = ctx.enqueue_create_buffer[dtype](0)
+            input_buf = ctx.enqueue_create_buffer[dtype](SIZE)
             result_buf = ctx.enqueue_create_buffer[dtype](SIZE)
             result_buf.enqueue_fill(0)
 
