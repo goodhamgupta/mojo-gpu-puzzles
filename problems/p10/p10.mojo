@@ -29,12 +29,19 @@ fn shared_memory_race(
         address_space = AddressSpace.SHARED,
     ].stack_allocation()
 
-    if row < size and col < size:
-        shared_sum[0] += a[row, col]
+    var local_sum = Scalar[dtype](0.0)
+
+    if Int(row) == 0 and Int(col) == 0:
+        local_sum = Scalar[dtype](0.0)
+        for r in range(size):
+            for c in range(size):
+                local_sum += rebind[Scalar[dtype]](a[r, c])
+
+        shared_sum[0] = local_sum
 
     barrier()
 
-    if row < size and col < size:
+    if Int(row) < size and Int(col) < size:
         output[row, col] = shared_sum[0]
 
 
@@ -49,7 +56,8 @@ fn add_10_2d(
 ):
     row = thread_idx.y
     col = thread_idx.x
-    output[row, col] = a[row, col] + 10.0
+    if Int(row) < size and Int(col) < size:
+        output[row, col] = a[row, col] + 10.0
 
 
 # ANCHOR_END: add_10_2d_no_guard
